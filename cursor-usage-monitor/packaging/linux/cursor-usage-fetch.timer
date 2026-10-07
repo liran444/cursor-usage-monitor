@@ -1,0 +1,10 @@
+[Unit]
+Description=Cursor usage periodic fetch
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

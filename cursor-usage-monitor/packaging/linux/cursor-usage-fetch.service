@@ -1,0 +1,10 @@
+[Unit]
+Description=Cursor usage fetch
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/cursor-usage fetch
+
+[Install]
+WantedBy=default.target
