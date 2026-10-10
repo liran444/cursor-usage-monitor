@@ -9,7 +9,12 @@ $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 Set-Location $Root
 
-$ActivateScript = Join-Path $PSScriptRoot "activate.ps1"
+function Refresh-Path {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+        [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+Refresh-Path
 
 function Get-PythonCandidatePath {
     param(
@@ -61,6 +66,26 @@ function Test-PythonCandidate {
     }
 }
 
+function Get-KnownPythonCandidates {
+    $candidates = @()
+
+    $launcher = Join-Path $env:LOCALAPPDATA "Programs\Python\Launcher\py.exe"
+    if (Test-Path $launcher) {
+        $candidates += @{ Exe = $launcher; Args = @("-3"); Path = $launcher }
+    }
+
+    $pythonRoot = Join-Path $env:LOCALAPPDATA "Programs\Python"
+    if (Test-Path $pythonRoot) {
+        Get-ChildItem -Path (Join-Path $pythonRoot "Python*\python.exe") -ErrorAction SilentlyContinue |
+            Sort-Object { $_.FullName } -Descending |
+            ForEach-Object {
+                $candidates += @{ Exe = $_.FullName; Args = @(); Path = $_.FullName }
+            }
+    }
+
+    return $candidates
+}
+
 function Find-Python {
     $candidates = @()
 
@@ -72,7 +97,16 @@ function Find-Python {
         if ($candidate) { $candidates += $candidate }
     }
 
+    $candidates += Get-KnownPythonCandidates
+
+    $seen = @{}
     foreach ($candidate in $candidates) {
+        $key = "$($candidate.Exe)|$($candidate.Args -join ',')"
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+        $seen[$key] = $true
+
         $result = Test-PythonCandidate -Candidate $candidate
         if ($result) {
             return $result
@@ -94,6 +128,19 @@ function Show-ManualPythonInstructions {
     Write-Host "  .\scripts\dev\windows\install.ps1"
 }
 
+function Test-WingetInstallSucceeded {
+    param(
+        [int]$ExitCode,
+        [string]$Output
+    )
+
+    if ($ExitCode -eq 0) {
+        return $true
+    }
+
+    return $Output -match 'already installed|No available upgrade found|No newer package versions are available'
+}
+
 function Try-InstallPythonWithWinget {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         return $false
@@ -105,21 +152,34 @@ function Try-InstallPythonWithWinget {
     }
 
     Write-Host "Installing Python 3.12 with winget..."
-    winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) {
+    $wingetOutput = winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements 2>&1 | Out-String
+    if (-not (Test-WingetInstallSucceeded -ExitCode $LASTEXITCODE -Output $wingetOutput)) {
+        Write-Host $wingetOutput
         Write-Error "winget install failed. Install Python manually and re-run this script."
     }
 
-    Write-Host ""
-    Write-Host "Python installed. Open a NEW terminal so PATH updates, then re-run:"
-    Write-Host "  .\scripts\dev\windows\install.ps1"
-    exit 0
+    if ($wingetOutput -match 'already installed|No available upgrade found') {
+        Write-Host "Python 3.12 is already installed."
+    } else {
+        Write-Host "Python 3.12 installed."
+    }
+
+    Refresh-Path
+    return $true
 }
 
 $python = Find-Python
 if (-not $python) {
     Write-Host "Python 3.10+ not found."
     if (-not (Try-InstallPythonWithWinget)) {
+        Show-ManualPythonInstructions
+        exit 1
+    }
+
+    $python = Find-Python
+    if (-not $python) {
+        Write-Host ""
+        Write-Host "Python was installed but is not available in this shell yet."
         Show-ManualPythonInstructions
         exit 1
     }
