@@ -35,16 +35,13 @@ More detail: [README-USER.txt](README-USER.txt).
 
 **Requirements:** Python 3.10+, Linux/macOS/Windows with a graphical session for tray testing.
 
-**Setup**
+**Setup** (from the repo root; requires Python 3.10+)
 
-```bash
-cd /var/www/html/cursor-usage-monitor
-./scripts/install-dev.sh
-```
+- **Linux:** `./scripts/install-dev-linux.sh`
+- **macOS:** `./scripts/install-dev-macos.sh`
+- **Windows (PowerShell):** `.\scripts\Install-Dev.ps1`
 
-Uses a `.venv` when `python3-venv` is installed; otherwise installs editable for your user (`~/.local/bin`). Optional: `sudo apt install python3-venv` (or `python3.14-venv`) then re-run for an isolated venv.
-
-Manual equivalent:
+Each script creates a `.venv` and runs `pip install -e ".[dev]"`. On Linux, if `python3-venv` is missing, it falls back to a user install (`~/.local/bin`); install it with `sudo apt install python3-venv` (or `python3.14-venv`) and re-run for an isolated venv.
 
 **Commands**
 
