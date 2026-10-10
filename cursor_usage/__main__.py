@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import subprocess
 import sys
 import webbrowser
 
@@ -55,10 +56,34 @@ def _cmd_config_show(_args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_tray(_args: argparse.Namespace) -> int:
+def _cmd_tray(args: argparse.Namespace) -> int:
     from ui.tray.app import run_tray
 
+    if getattr(args, "background", False):
+        return _spawn_tray_background()
+
     run_tray()
+    return 0
+
+
+def _spawn_tray_background() -> int:
+    if getattr(sys, "frozen", False):
+        cmd = [sys.executable, "tray"]
+    else:
+        cmd = [sys.executable, "-m", "cursor_usage.__main__", "tray"]
+
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+
+    subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=creationflags,
+        close_fds=True,
+    )
+    print("Tray started in the background.")
     return 0
 
 
@@ -72,7 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("fetch", help="Fetch usage-summary into cache")
-    sub.add_parser("tray", help="Run system tray UI")
+    tray = sub.add_parser("tray", help="Run system tray UI")
+    tray.add_argument(
+        "--background",
+        action="store_true",
+        help="Start tray detached so the terminal returns immediately (Windows-friendly)",
+    )
     sub.add_parser("open-dashboard", help="Open Cursor usage dashboard in browser")
 
     token = sub.add_parser("token", help="Session token management")

@@ -164,6 +164,16 @@ def run_tray() -> None:
     ensure_single_instance(lock_path())
     spawn_fetch()
 
+    print("Cursor Usage Monitor tray is running.", flush=True)
+    print(
+        "This terminal stays open until you choose Quit from the tray menu or press Ctrl+C.",
+        flush=True,
+    )
+    print(
+        "On Windows, check the ^ overflow area near the clock if you do not see the icon.",
+        flush=True,
+    )
+
     path = status_path()
     status = read_status(path)
     label, warn = _icon_label(status)

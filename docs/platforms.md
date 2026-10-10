@@ -55,10 +55,14 @@ Re-activate: `source ./scripts/dev/macos/activate.sh`
 
 ```powershell
 .\scripts\dev\windows\install.ps1
-cursor-usage tray
+cursor-usage tray --background
 ```
 
+`cursor-usage tray` blocks the terminal until you Quit from the menu or press Ctrl+C — that is normal. Use `--background` to return to the shell immediately.
+
 Re-activate: `. .\scripts\dev\windows\activate.ps1`
+
+**If no tray icon appears:** click the **^** overflow chevron near the clock (Windows hides new icons there by default). Drag the icon to the visible taskbar if needed.
 
 **If `python` opens the Microsoft Store:** Python is not installed (only the Windows alias stub). Install Python from [python.org](https://www.python.org/downloads/) or accept the winget prompt from the install script. Then disable **App execution aliases** for `python.exe` and `python3.exe`.
 
