@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUNDLE="${1:-$ROOT/dist/CursorUsageMonitor}"
 if [[ ! -d "$BUNDLE" ]]; then
   echo "Bundle not found: $BUNDLE" >&2
-  echo "Build first — see README.md (Developer — build)" >&2
+  echo "Build first — see docs/BUILD.md" >&2
   exit 1
 fi
 INSTALL_DIR="${HOME}/.local/opt/cursor-usage-monitor"

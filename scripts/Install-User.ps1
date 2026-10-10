@@ -4,7 +4,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path $BundlePath)) {
-    Write-Error "Bundle not found: $BundlePath. Build first — see README.md (Developer — build)"
+    Write-Error "Bundle not found: $BundlePath. Build first — see docs/BUILD.md"
 }
 $InstallDir = Join-Path $env:LOCALAPPDATA "CursorUsageMonitor"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null

@@ -1,5 +1,9 @@
 # Developer setup: editable install in .venv (Windows)
 #Requires -Version 5.1
+param(
+    [switch]$NoShell
+)
+
 $ErrorActionPreference = "Stop"
 
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -40,17 +44,26 @@ Write-Host "Creating .venv in $Root"
 
 & $python.Exe @($python.Args + @("-m", "venv", ".venv"))
 
-$venvPython = Join-Path $Root ".venv\Scripts\python.exe"
-if (-not (Test-Path $venvPython)) {
+$Activate = Join-Path $Root ".venv\Scripts\Activate.ps1"
+if (-not (Test-Path $Activate)) {
     Write-Error "Failed to create .venv. Re-run after installing Python with the venv module enabled."
 }
 
-& $venvPython -m pip install -U pip
-& $venvPython -m pip install -e ".[dev]"
+. $Activate
+
+python -m pip install -U pip
+pip install -e ".[dev]"
 
 Write-Host ""
-Write-Host "Done. Activate and run:"
-Write-Host "  .\.venv\Scripts\Activate.ps1"
-Write-Host "  cursor-usage tray"
-Write-Host ""
-Write-Host "Tests: pytest"
+Write-Host "Done. Dev environment installed."
+
+if ($NoShell) {
+    Write-Host "Activate later with:"
+    Write-Host "  . .\scripts\enter-dev.ps1"
+    Write-Host ""
+    Write-Host "Then run: cursor-usage tray"
+    exit 0
+}
+
+Write-Host "Opening dev shell with venv active..."
+& (Join-Path $PSScriptRoot "enter-dev.ps1")

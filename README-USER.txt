@@ -1,7 +1,7 @@
 Cursor Usage Monitor — User guide
 =================================
 
-Short install overview: see **README.md** § “End user install” in the project/repo root.
+Short install overview: see docs/INSTALL.md (or README.md in the repo root).
 This file has detailed steps.
 
 Requirements
@@ -12,7 +12,7 @@ Requirements
 Install
 -------
 1. Download the release for your OS (zip or installer).
-2. Run the included install script (see platforms.md in full docs if needed).
+2. Run the included install script (see docs/INSTALL.md or docs/platforms.md).
 3. Start "Cursor Usage Monitor" from your menu or autostart.
 
 Session token (required once, again when it expires)

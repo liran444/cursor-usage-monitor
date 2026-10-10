@@ -5,6 +5,19 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+enter_dev_shell() {
+  if [[ -t 1 ]] && [[ -z "${INSTALL_DEV_NO_SHELL:-}" ]]; then
+    echo "Opening dev shell with venv active..."
+    exec "${SHELL:-/bin/bash}" -c "source '${ROOT}/.venv/bin/activate'; cd '${ROOT}'; exec ${SHELL:-/bin/bash} -i"
+  fi
+
+  echo ""
+  echo "Activate later with:"
+  echo "  source ./scripts/enter-dev.sh"
+  echo ""
+  echo "Then run: cursor-usage tray"
+}
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 not found. Install Python 3.10+ (e.g. brew install python@3.12), then re-run:" >&2
   echo "  ./scripts/install-dev-macos.sh" >&2
@@ -25,11 +38,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 python -m pip install -U pip
-python -m pip install -e ".[dev]"
+pip install -e ".[dev]"
 
 echo ""
-echo "Done. Activate and run:"
-echo "  source ${ROOT}/.venv/bin/activate"
-echo "  cursor-usage tray"
-echo ""
-echo "Tests: pytest"
+echo "Done. Dev environment installed."
+enter_dev_shell

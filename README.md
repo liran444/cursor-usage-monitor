@@ -2,107 +2,18 @@
 
 Cross-platform system tray app for Cursor **personal included usage** and **team pool** (dashboard `usage-summary` API). Unofficial; not affiliated with Cursor.
 
-For step-by-step end-user help (token, tray, uninstall), see [README-USER.txt](README-USER.txt) and [docs/platforms.md](docs/platforms.md).
+## Documentation
 
----
+| | |
+|---|---|
+| **End users** | [User guide](README-USER.txt) · [Install](docs/INSTALL.md) · [Uninstall](docs/UNINSTALL.md) |
+| **Developers** | [Development](docs/DEVELOPMENT.md) · [Build](docs/BUILD.md) |
+| **Reference** | [Platform notes](docs/platforms.md) · [Auth](docs/AUTH.md) · [API fields](docs/usage-summary-fields.md) |
 
-## 1. End user install
+## Quick start
 
-You do **not** need Python or git. Download the release for your OS (zip or installer), then:
+**Using a release (no Python needed):** download for your OS → [Install](docs/INSTALL.md) → set your session token → tray runs at login.
 
-1. **Install**
-   - **Linux:** Extract the tarball, run `./scripts/install-user.sh` (or point it at the extracted `CursorUsageMonitor` folder).
-   - **Windows:** Extract the zip, run `scripts/Install-User.ps1`.
-   - **macOS:** Run `scripts/install-user-macos.sh` with the `.app` from the release (copies to Applications and enables login autostart).
+**Working on the repo:** Python 3.10+ → [Development setup](docs/DEVELOPMENT.md) → `cursor-usage tray` or `pytest`.
 
-2. **Session token** (required once; again when it expires)
-   - Sign in at [cursor.com/dashboard](https://cursor.com/dashboard).
-   - DevTools → Application → Cookies → copy `WorkosCursorSessionToken`.
-   - Run from the install folder (or PATH):  
-     `cursor-usage token set`  
-     then verify:  
-     `cursor-usage token test`
-
-3. **Run**
-   - Tray should start at login after install. Or run: `cursor-usage tray`
-   - Icon shows **personal included usage %**; click for details, refresh, and team pool.
-
-More detail: [README-USER.txt](README-USER.txt).
-
----
-
-## 2. Developer — development
-
-**Requirements:** Python 3.10+, Linux/macOS/Windows with a graphical session for tray testing.
-
-**Setup** (from the repo root; requires Python 3.10+)
-
-- **Linux:** `./scripts/install-dev-linux.sh`
-- **macOS:** `./scripts/install-dev-macos.sh`
-- **Windows (PowerShell):** `.\scripts\Install-Dev.ps1`
-
-Each script creates a `.venv` and runs `pip install -e ".[dev]"`. On Linux, if `python3-venv` is missing, it falls back to a user install (`~/.local/bin`); install it with `sudo apt install python3-venv` (or `python3.14-venv`) and re-run for an isolated venv.
-
-**Commands**
-
-| Command | Purpose |
-|---------|---------|
-| `cursor-usage token set` | Save session cookie to OS keyring |
-| `cursor-usage token test` | Fetch once to verify auth |
-| `cursor-usage token clear` | Remove token from keyring |
-| `cursor-usage fetch` | Update `status.json` cache |
-| `cursor-usage tray` | System tray / menu bar UI |
-| `cursor-usage config show` | Show `pollMinutes`, warn threshold, etc. |
-| `cursor-usage open-dashboard` | Open Cursor usage in browser |
-
-**Tests**
-
-```bash
-pytest
-```
-
-Cache and config paths use `platformdirs` (e.g. Linux: `~/.local/share/cursor-usage/`, `~/.config/cursor-usage/`).
-
-Docs: [docs/AUTH.md](docs/AUTH.md), [docs/usage-summary-fields.md](docs/usage-summary-fields.md).
-
----
-
-## 3. Developer — build
-
-Build **on each target OS** (or CI matrix). Requires `pip install -e ".[dev]"` (includes PyInstaller).
-
-**Linux x86_64**
-
-```bash
-./scripts/build-release-linux.sh
-# or:
-pyinstaller --noconfirm packaging/pyinstaller/cursor_usage_linux.spec
-```
-
-Output: `dist/CursorUsageMonitor/` with `cursor-usage` binary, `README-USER.txt`, and `LICENSE` bundled.
-
-**Windows**
-
-```bash
-pyinstaller --noconfirm packaging/pyinstaller/cursor_usage_win.spec
-```
-
-Output: `dist/CursorUsageMonitor/` (use `Install-User.ps1` after copying to recipients).
-
-**macOS**
-
-```bash
-pyinstaller --noconfirm packaging/pyinstaller/cursor_usage_mac.spec
-```
-
-Output: `dist/Cursor Usage Monitor.app` (use `install-user-macos.sh`).
-
-**Checksums (optional)**
-
-```bash
-cd dist && sha256sum CursorUsageMonitor/cursor-usage >> SHA256SUMS.txt
-```
-
-**Spec files:** `packaging/pyinstaller/cursor_usage_{linux,win,mac}.spec` — one-folder layout; entry `cursor-usage` with subcommands `tray`, `fetch`, `token`.
-
-Ship release zips with [README-USER.txt](README-USER.txt) and [LICENSE](LICENSE). Recipients use **§ End user install** above, not pip.
+**Shipping a release:** [Build](docs/BUILD.md) on each target OS.
