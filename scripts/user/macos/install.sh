@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 APP="${1:-$ROOT/packaging/pyinstaller/dist/Cursor Usage Monitor.app}"
 PLIST="${HOME}/Library/LaunchAgents/com.cursor.usage.tray.plist"
 if [[ ! -d "$APP" ]]; then

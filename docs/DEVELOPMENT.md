@@ -2,27 +2,43 @@
 
 **Requirements:** Python 3.10+, and a graphical session for tray testing (Linux/macOS/Windows).
 
+Script index: [scripts/README.md](../scripts/README.md).
+
 ## Setup
 
-From the repo root, run the script for your OS:
+From the repo root, run the install script for your OS:
 
 | OS | Command |
 |----|---------|
-| **Linux** | `./scripts/install-dev-linux.sh` |
-| **macOS** | `./scripts/install-dev-macos.sh` |
-| **Windows** | `.\scripts\Install-Dev.ps1` |
+| **Windows** | `.\scripts\dev\windows\install.ps1` |
+| **Linux** | `./scripts/dev/linux/install.sh` |
+| **macOS** | `./scripts/dev/macos/install.sh` |
 
-Each script creates a `.venv`, activates it, runs `pip install -e ".[dev]"`, then opens an interactive dev shell with the venv active.
+Each script creates a `.venv` and runs `pip install -e ".[dev]"`.
 
-**Skip the auto-shell** (e.g. CI):
+On Windows, if Python is missing, the script offers to install it via winget. If `python` opens the Microsoft Store, disable **App execution aliases** for `python.exe` and `python3.exe` (Settings → Apps → Advanced app settings).
 
-- Windows: `.\scripts\Install-Dev.ps1 -NoShell`
-- Linux/macOS: `INSTALL_DEV_NO_SHELL=1 ./scripts/install-dev-<os>.sh`
+**Skip interactive shell** (Linux/macOS only):
+
+```bash
+INSTALL_DEV_NO_SHELL=1 ./scripts/dev/linux/install.sh
+```
 
 **Re-activate later:**
 
-- Windows: `. .\scripts\enter-dev.ps1`
-- Linux/macOS: `source ./scripts/enter-dev.sh`
+| OS | Command |
+|----|---------|
+| **Windows** | `. .\scripts\dev\windows\activate.ps1` |
+| **Linux** | `source ./scripts/dev/linux/activate.sh` |
+| **macOS** | `source ./scripts/dev/macos/activate.sh` |
+
+**Verify install:**
+
+| OS | Command |
+|----|---------|
+| **Windows** | `.\scripts\dev\windows\verify.ps1` |
+| **Linux** | `./scripts/dev/linux/verify.sh` |
+| **macOS** | `./scripts/dev/macos/verify.sh` |
 
 On Linux, if `python3-venv` is missing, the install falls back to a user install (`~/.local/bin`). For an isolated venv: `sudo apt install python3-venv` (or `python3.14-venv`), then re-run.
 
@@ -47,6 +63,8 @@ Token setup: [AUTH.md](AUTH.md).
 ```bash
 pytest
 ```
+
+Or run the verify script for your OS (see above).
 
 ## Data paths
 

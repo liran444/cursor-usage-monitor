@@ -1,16 +1,16 @@
 # Activate the dev venv.
 # Dot-source to keep it in your current terminal:
-#   . .\scripts\enter-dev.ps1
+#   . .\scripts\dev\windows\activate.ps1
 param(
     [switch]$NoShell
 )
 
 $ErrorActionPreference = "Stop"
-$Root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$Root = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 $Activate = Join-Path $Root ".venv\Scripts\Activate.ps1"
 
 if (-not (Test-Path $Activate)) {
-    Write-Error "No .venv found. Run .\scripts\Install-Dev.ps1 first."
+    Write-Error "No .venv found. Run .\scripts\dev\windows\install.ps1 first."
 }
 
 Set-Location $Root

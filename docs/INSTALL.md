@@ -6,9 +6,9 @@ You do **not** need Python or git. Download the release for your OS (zip or inst
 
 | OS | Steps |
 |----|-------|
-| **Linux** | Extract the tarball, run `./scripts/install-user.sh` (or pass the extracted `CursorUsageMonitor` folder). |
-| **Windows** | Extract the zip, run `scripts\Install-User.ps1`. |
-| **macOS** | Run `scripts/install-user-macos.sh` with the `.app` from the release (copies to Applications and enables login autostart). |
+| **Linux** | Extract the tarball, run `./scripts/user/linux/install.sh` (or pass the extracted `CursorUsageMonitor` folder). |
+| **Windows** | Extract the zip, run `.\scripts\user\windows\install.ps1`. |
+| **macOS** | Run `./scripts/user/macos/install.sh` with the `.app` from the release (copies to Applications and enables login autostart). |
 
 Platform-specific notes and troubleshooting: [platforms.md](platforms.md).
 

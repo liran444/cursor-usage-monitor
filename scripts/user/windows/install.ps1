@@ -1,6 +1,6 @@
 # Install Cursor Usage Monitor from extracted release folder
 param(
-    [string]$BundlePath = "$PSScriptRoot\..\dist\CursorUsageMonitor"
+    [string]$BundlePath = "$PSScriptRoot\..\..\..\dist\CursorUsageMonitor"
 )
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path $BundlePath)) {

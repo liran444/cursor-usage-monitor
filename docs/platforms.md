@@ -1,21 +1,21 @@
 # Platform notes
 
-Install steps: [INSTALL.md](INSTALL.md). Dev setup: [DEVELOPMENT.md](DEVELOPMENT.md).
+Install steps: [INSTALL.md](INSTALL.md). Dev setup: [DEVELOPMENT.md](DEVELOPMENT.md). Script index: [scripts/README.md](../scripts/README.md).
 
 ## Linux
 
 ### End user
 
-- Extract release tarball, run `scripts/install-user.sh`.
+- Extract release tarball, run `./scripts/user/linux/install.sh`.
 
 ### Developer
 
 ```bash
-./scripts/install-dev-linux.sh
+./scripts/dev/linux/install.sh
 cursor-usage tray
 ```
 
-Re-activate: `source ./scripts/enter-dev.sh`
+Re-activate: `source ./scripts/dev/linux/activate.sh`
 
 ### Tray
 
@@ -29,16 +29,16 @@ Re-activate: `source ./scripts/enter-dev.sh`
 
 ### End user
 
-- Run `scripts/install-user-macos.sh` with the `.app` from the release.
+- Run `./scripts/user/macos/install.sh` with the `.app` from the release.
 
 ### Developer
 
 ```bash
-./scripts/install-dev-macos.sh
+./scripts/dev/macos/install.sh
 cursor-usage tray
 ```
 
-Re-activate: `source ./scripts/enter-dev.sh`
+Re-activate: `source ./scripts/dev/macos/activate.sh`
 
 ### Tray
 
@@ -49,16 +49,18 @@ Re-activate: `source ./scripts/enter-dev.sh`
 
 ### End user
 
-- Extract release zip, run `scripts\Install-User.ps1`.
+- Extract release zip, run `.\scripts\user\windows\install.ps1`.
 
 ### Developer
 
 ```powershell
-.\scripts\Install-Dev.ps1
+.\scripts\dev\windows\install.ps1
 cursor-usage tray
 ```
 
-Re-activate: `. .\scripts\enter-dev.ps1`
+Re-activate: `. .\scripts\dev\windows\activate.ps1`
+
+**If `python` opens the Microsoft Store:** Python is not installed (only the Windows alias stub). Install Python from [python.org](https://www.python.org/downloads/) or accept the winget prompt from the install script. Then disable **App execution aliases** for `python.exe` and `python3.exe`.
 
 ### Tray
 

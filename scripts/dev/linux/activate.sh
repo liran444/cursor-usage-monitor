@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Activate the dev venv. Source to keep it in your current terminal:
-#   source ./scripts/enter-dev.sh
+#   source ./scripts/dev/linux/activate.sh
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 ACTIVATE="${ROOT}/.venv/bin/activate"
 
 if [[ ! -f "$ACTIVATE" ]]; then
-  echo "No .venv found. Run the install script for your OS first." >&2
+  echo "No .venv found. Run ./scripts/dev/linux/install.sh first." >&2
   exit 1
 fi
 

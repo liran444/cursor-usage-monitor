@@ -14,6 +14,6 @@ Cross-platform system tray app for Cursor **personal included usage** and **team
 
 **Using a release (no Python needed):** download for your OS → [Install](docs/INSTALL.md) → set your session token → tray runs at login.
 
-**Working on the repo:** Python 3.10+ → [Development setup](docs/DEVELOPMENT.md) → `cursor-usage tray` or `pytest`.
+**Working on the repo:** run `.\scripts\dev\windows\install.ps1` (or Linux/macOS equivalent) → [Development setup](docs/DEVELOPMENT.md) → `cursor-usage tray` or `pytest`.
 
 **Shipping a release:** [Build](docs/BUILD.md) on each target OS.

@@ -5,7 +5,7 @@ Build **on each target OS** (or CI matrix). Requires dev setup first (`pip insta
 ## Linux x86_64
 
 ```bash
-./scripts/build-release-linux.sh
+./scripts/build/linux/build.sh
 # or:
 pyinstaller --noconfirm packaging/pyinstaller/cursor_usage_linux.spec
 ```
@@ -18,7 +18,7 @@ Output: `dist/CursorUsageMonitor/` with `cursor-usage` binary, `README-USER.txt`
 pyinstaller --noconfirm packaging/pyinstaller/cursor_usage_win.spec
 ```
 
-Output: `dist/CursorUsageMonitor/` — ship with `Install-User.ps1` for recipients.
+Output: `dist/CursorUsageMonitor/` — ship with `scripts/user/windows/install.ps1` for recipients.
 
 ## macOS
 
@@ -26,7 +26,7 @@ Output: `dist/CursorUsageMonitor/` — ship with `Install-User.ps1` for recipien
 pyinstaller --noconfirm packaging/pyinstaller/cursor_usage_mac.spec
 ```
 
-Output: `dist/Cursor Usage Monitor.app` — ship with `install-user-macos.sh` for recipients.
+Output: `dist/Cursor Usage Monitor.app` — ship with `scripts/user/macos/install.sh` for recipients.
 
 ## Checksums (optional)
 

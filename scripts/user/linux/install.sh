@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install from PyInstaller one-folder bundle in dist/
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUNDLE="${1:-$ROOT/dist/CursorUsageMonitor}"
 if [[ ! -d "$BUNDLE" ]]; then
   echo "Bundle not found: $BUNDLE" >&2

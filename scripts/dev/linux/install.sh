@@ -2,48 +2,24 @@
 # Developer setup: editable install in .venv (Linux)
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+DEV_OS="linux"
+DEV_PYTHON_HINT="Install python3 (3.10+), then re-run:"
+
 cd "$ROOT"
+# shellcheck source=../_common.sh
+source "$SCRIPT_DIR/../_common.sh"
 
-enter_dev_shell() {
-  if [[ -t 1 ]] && [[ -z "${INSTALL_DEV_NO_SHELL:-}" ]]; then
-    echo "Opening dev shell with venv active..."
-    exec "${SHELL:-/bin/bash}" -c "source '${ROOT}/.venv/bin/activate'; cd '${ROOT}'; exec ${SHELL:-/bin/bash} -i"
-  fi
-
-  echo ""
-  echo "Activate later with:"
-  echo "  source ./scripts/enter-dev.sh"
-  echo ""
-  echo "Then run: cursor-usage tray"
-}
-
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "Python 3 not found. Install python3 (3.10+), then re-run:" >&2
-  echo "  ./scripts/install-dev-linux.sh" >&2
-  exit 1
-fi
-
-if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-  echo "Python 3.10+ required." >&2
-  python3 --version >&2 || true
-  exit 1
-fi
-
-echo "Using $(python3 --version)"
-
-install_editable() {
-  python -m pip install -U pip
-  pip install -e ".[dev]"
-}
+dev_check_python
 
 if python3 -m venv .venv >/dev/null 2>&1; then
   # shellcheck source=/dev/null
   source .venv/bin/activate
-  install_editable
+  dev_install_editable
   echo ""
   echo "Done. Dev environment installed."
-  enter_dev_shell
+  dev_enter_shell
   exit 0
 fi
 
@@ -67,4 +43,4 @@ echo "Done. Run: cursor-usage tray"
 if ! command -v cursor-usage >/dev/null 2>&1; then
   echo "If cursor-usage is not on PATH, add ~/.local/bin to PATH or run: python3 -m cursor_usage tray" >&2
 fi
-echo "Tests: pytest"
+echo "Verify: ./scripts/dev/linux/verify.sh"
