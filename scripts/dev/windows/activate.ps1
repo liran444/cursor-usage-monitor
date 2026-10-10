@@ -21,6 +21,9 @@ if ($NoShell -or $MyInvocation.InvocationName -eq '.') {
     return
 }
 
-Write-Host "Dev shell ready. Try: cursor-usage tray | pytest"
+Write-Host "To activate in THIS terminal instead, run:"
+Write-Host "  . .\scripts\dev\windows\activate.ps1"
+Write-Host ""
+Write-Host "Opening a new dev shell..."
 $shell = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
-& $shell -NoExit -Command "Set-Location '$Root'; . '$Activate'"
+& $shell -NoExit -Command "Set-Location '$Root'; . '$Activate'; Write-Host 'Dev shell ready. Try: cursor-usage tray | pytest'"

@@ -197,8 +197,34 @@ if (-not (Test-Path $Activate)) {
 
 . $Activate
 
+function Remove-CorruptedPipPackages {
+    $sitePackages = Join-Path $Root ".venv\Lib\site-packages"
+    if (-not (Test-Path $sitePackages)) {
+        return
+    }
+    Get-ChildItem -Path $sitePackages -Directory -Filter "~*" -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Remove-CorruptedPipPackages
+
 python -m pip install -U pip
 pip install -e ".[dev]"
+
+$CursorUsage = Join-Path $Root ".venv\Scripts\cursor-usage.exe"
+if (-not (Test-Path $CursorUsage)) {
+    Write-Error "Install finished but cursor-usage.exe is missing. Re-run this script."
+}
+& $CursorUsage --help | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Repairing broken editable install..."
+    Remove-CorruptedPipPackages
+    pip install --force-reinstall -e ".[dev]"
+    & $CursorUsage --help | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "cursor-usage entry point is broken. Try: Remove-Item -Recurse -Force .venv, then re-run install."
+    }
+}
 
 Write-Host ""
 Write-Host "Done. Dev environment installed."

@@ -33,6 +33,10 @@ def settings_path() -> Path:
     return config_dir() / "settings.json"
 
 
+def token_path() -> Path:
+    return config_dir() / "session.token"
+
+
 def lock_path() -> Path:
     return cache_dir() / "tray.lock"
 

@@ -12,7 +12,7 @@ Remove autostart (see OS below). Delete install directory if you copied a releas
 
 Remove `~/.config/autostart/cursor-usage-tray.desktop`.
 
-Optional: remove `~/.local/share/cursor-usage` and `~/.config/cursor-usage`.
+Optional: remove `~/.local/share/cursor-usage` and `~/.config/cursor-usage` (includes `session.token` if keyring fallback was used).
 
 ## macOS
 
@@ -26,3 +26,5 @@ rm ~/Library/LaunchAgents/com.cursor.usage.tray.plist
 Remove shortcut from `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Cursor Usage Monitor.lnk`.
 
 Remove `%LOCALAPPDATA%\CursorUsageMonitor` if present.
+
+Optional: remove `%LOCALAPPDATA%\cursor-usage-monitor\cursor-usage\Config\session.token` if present.

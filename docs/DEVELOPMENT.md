@@ -24,7 +24,7 @@ On Windows, if Python is missing, the script offers to install it via winget. If
 INSTALL_DEV_NO_SHELL=1 ./scripts/dev/linux/install.sh
 ```
 
-**Re-activate later:**
+**Re-activate later** (note the leading `.` on Windows — it dot-sources the script into your current shell):
 
 | OS | Command |
 |----|---------|

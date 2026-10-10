@@ -3,43 +3,64 @@
 from __future__ import annotations
 
 import argparse
-import getpass
 import subprocess
 import sys
 import webbrowser
 
 from cursor_usage import keyring_store
+from cursor_usage.keyring_store import TokenStorageError
 from cursor_usage.fetch import run_fetch
 from cursor_usage.paths import load_settings, save_settings
+from cursor_usage.token_input import read_token
 
 
-def _cmd_fetch(_args: argparse.Namespace) -> int:
-    return run_fetch()
+def _cmd_fetch(args: argparse.Namespace) -> int:
+    return run_fetch(verbose=getattr(args, "verbose", False))
 
 
-def _cmd_token_set(_args: argparse.Namespace) -> int:
-    print("Paste WorkosCursorSessionToken from browser DevTools (cursor.com cookies).")
-    print("Input is hidden.")
+def _cmd_token_set(args: argparse.Namespace) -> int:
     try:
-        token = getpass.getpass("Token: ")
+        token = read_token(
+            hidden=args.hidden,
+            from_stdin=args.stdin,
+            from_clipboard=args.clipboard,
+            file_path=args.file,
+            manual=args.manual,
+        )
     except (EOFError, KeyboardInterrupt):
         print("\nCancelled.", file=sys.stderr)
         return 1
-    try:
-        keyring_store.set_token(token)
-    except ValueError as exc:
+    except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    print("Token saved to OS keyring.")
+    if token == "":
+        print("Token cannot be empty.", file=sys.stderr)
+        return 1
+    try:
+        storage = keyring_store.set_token(token)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        print("Try: cursor-usage token set --file token.txt", file=sys.stderr)
+        return 1
+    except TokenStorageError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if storage == "keyring":
+        print(f"Token saved to OS keyring ({len(token)} characters).")
+    else:
+        print(f"Token saved to config file ({len(token)} characters).")
+        print("Windows Credential Manager was unavailable; using local config file instead.")
     return 0
 
 
-def _cmd_token_test(_args: argparse.Namespace) -> int:
-    code = run_fetch()
+def _cmd_token_test(args: argparse.Namespace) -> int:
+    code = run_fetch(verbose=getattr(args, "verbose", False))
     if code == 0:
         print("Fetch succeeded.")
     else:
-        print("Fetch failed. Check token or network.", file=sys.stderr)
+        if not getattr(args, "verbose", False):
+            print("Fetch failed. Check token or network.", file=sys.stderr)
+            print("Run: cursor-usage token test --verbose", file=sys.stderr)
     return code
 
 
@@ -96,7 +117,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cursor-usage")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("fetch", help="Fetch usage-summary into cache")
+    fetch = sub.add_parser("fetch", help="Fetch usage-summary into cache")
+    fetch.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print HTTP status and error details",
+    )
     tray = sub.add_parser("tray", help="Run system tray UI")
     tray.add_argument(
         "--background",
@@ -107,8 +133,38 @@ def build_parser() -> argparse.ArgumentParser:
 
     token = sub.add_parser("token", help="Session token management")
     token_sub = token.add_subparsers(dest="token_cmd", required=True)
-    token_sub.add_parser("set", help="Save token to keyring")
-    token_sub.add_parser("test", help="Run fetch to verify token")
+    token_set = token_sub.add_parser("set", help="Save token to keyring")
+    token_set.add_argument(
+        "--file",
+        metavar="PATH",
+        help="Read token from a text file (recommended if paste fails)",
+    )
+    token_set.add_argument(
+        "--clipboard",
+        action="store_true",
+        help="Read token from clipboard (default: press Enter after copying)",
+    )
+    token_set.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read full token from stdin",
+    )
+    token_set.add_argument(
+        "--manual",
+        action="store_true",
+        help="Type or paste token at a prompt (often unreliable in IDE terminals)",
+    )
+    token_set.add_argument(
+        "--hidden",
+        action="store_true",
+        help="Hide input while typing (may break paste on Windows)",
+    )
+    token_test = token_sub.add_parser("test", help="Run fetch to verify token")
+    token_test.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print HTTP status and error details",
+    )
     token_sub.add_parser("clear", help="Remove token from keyring")
 
     config = sub.add_parser("config", help="Settings")
