@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from cursor_usage_app.app.widget_runner import run_widget
 from cursor_usage_app.auth.token_cli import add_token_subparser
 from cursor_usage_app.fetch_service import run_fetch
 
@@ -15,6 +16,14 @@ def main(argv: list[str] | None = None) -> int:
 
     fetch_parser = sub.add_parser("fetch", help="Fetch usage-summary and update cache")
     fetch_parser.set_defaults(handler=_cmd_fetch)
+
+    widget_parser = sub.add_parser("widget", help="Open usage widget window")
+    widget_parser.add_argument(
+        "--fixture",
+        metavar="PATH",
+        help="Load cache JSON fixture into the widget (dev/test)",
+    )
+    widget_parser.set_defaults(handler=_cmd_widget)
 
     add_token_subparser(sub)
 
@@ -42,6 +51,14 @@ def main(argv: list[str] | None = None) -> int:
 
 def _cmd_fetch(_args: argparse.Namespace) -> int:
     return run_fetch()
+
+
+def _cmd_widget(args: argparse.Namespace) -> int:
+    argv: list[str] = ["widget"]
+    fixture = getattr(args, "fixture", None)
+    if fixture is not None:
+        argv.extend(["--fixture", fixture])
+    return run_widget(argv)
 
 
 if __name__ == "__main__":
