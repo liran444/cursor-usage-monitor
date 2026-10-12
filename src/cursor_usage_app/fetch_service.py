@@ -1,4 +1,4 @@
-"""Orchestrate fetch + cache write (Phase 1: token from env only)."""
+"""Orchestrate fetch + cache write."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 
 from cursor_usage_app.api.client import UsageSummaryClient, UsageSummaryHttpError
 from cursor_usage_app.api.usage_summary import fetch_usage_snapshot
+from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.cache.usage_cache import (
     CacheEnvelopeError,
     CacheEnvelopeOk,
@@ -16,28 +17,33 @@ from cursor_usage_app.cache.usage_cache import (
     write_cache_envelope,
 )
 
-_PHASE1_TOKEN_ENV = "CURSOR_USAGE_TOKEN_TEST"
+_TEST_TOKEN_ENV = "CURSOR_USAGE_TOKEN_TEST"
 
 
-def resolve_phase1_session_token() -> str | None:
-    """Session source until Phase 2 session_store is wired."""
-    token = os.environ.get(_PHASE1_TOKEN_ENV)
-    if token is None:
-        return None
-    stripped = token.strip()
-    if stripped == "":
-        return None
-    return stripped
+def resolve_session_token(store: SessionStore | None = None) -> str | None:
+    """Load token from session store; tests may use CURSOR_USAGE_TOKEN_TEST."""
+    env_token = os.environ.get(_TEST_TOKEN_ENV)
+    if env_token is not None:
+        stripped = env_token.strip()
+        if stripped != "":
+            return stripped
+
+    session_store = store or SessionStore()
+    return session_store.get_token()
 
 
-def run_fetch(cache_path: Path | None = None, client: UsageSummaryClient | None = None) -> int:
+def run_fetch(
+    cache_path: Path | None = None,
+    client: UsageSummaryClient | None = None,
+    store: SessionStore | None = None,
+) -> int:
     """
     Fetch usage-summary and write cache envelope.
 
     Returns process exit code (0 success, 1 failure).
     """
     path = cache_path or default_cache_path()
-    token = resolve_phase1_session_token()
+    token = resolve_session_token(store=store)
     fetched_at = utc_now_iso()
 
     if token is None:
