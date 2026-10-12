@@ -5,12 +5,13 @@ from __future__ import annotations
 import webbrowser
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -26,9 +27,19 @@ from cursor_usage_app.app.widget.formatting import (
 )
 from cursor_usage_app.app.widget.gauge_widget import DonutGauge, MiniTotalGauge, SegmentedTotalGauge
 from cursor_usage_app.app.widget.progress_bar import HorizontalBar
-from cursor_usage_app.app.widget.set_token_dialog import SetTokenDialog
-from cursor_usage_app.app.widget.view_model import WidgetViewModel, view_model_from_envelope, view_model_loading
+from cursor_usage_app.app.widget.view_model import (
+    WidgetViewModel,
+    shows_browser_login,
+    view_model_from_envelope,
+    view_model_loading,
+)
+from cursor_usage_app.auth.browser_import import (
+    BrowserImportError,
+    import_session_token_from_browsers,
+    is_retryable_import_error,
+)
 from cursor_usage_app.auth.session_store import SessionStore
+from cursor_usage_app.auth.token_normalize import TokenNormalizeError
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, parse_cache_envelope
 from cursor_usage_app.domain.models import UsageSnapshot
 
@@ -36,6 +47,10 @@ _WIDGET_WIDTH = 295
 _FULL_HEIGHT = 620
 _COMPACT_HEIGHT = 230
 _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
+_LOGIN_URL = "https://cursor.com/login"
+_LOGIN_POLL_MS = 2000
+_LOGIN_WAIT_MS = 120_000
+_SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
 
 
 class UsageWidget(QWidget):
@@ -44,6 +59,8 @@ class UsageWidget(QWidget):
     quit_requested = Signal()
     hide_requested = Signal()
     compact_changed = Signal(bool)
+    _login_imported = Signal(str)
+    _login_import_failed = Signal(str)
 
     def __init__(
         self,
@@ -57,6 +74,19 @@ class UsageWidget(QWidget):
         self._compact = False
         self._view_model = view_model_from_envelope(None)
         self._fetch_thread = None
+        self._login_waiting = False
+        self._login_busy = False
+        self._login_deadline_ms = 0
+        self._activation_hooked = False
+        self._login_timer = QTimer(self)
+        self._login_timer.setInterval(_LOGIN_POLL_MS)
+        self._login_timer.timeout.connect(self._attempt_browser_import)
+        self._spinner_index = 0
+        self._spinner_timer = QTimer(self)
+        self._spinner_timer.setInterval(120)
+        self._spinner_timer.timeout.connect(self._advance_login_spinner)
+        self._login_imported.connect(self._on_import_success)
+        self._login_import_failed.connect(self._on_import_error)
 
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -135,6 +165,39 @@ class UsageWidget(QWidget):
         self._inline_error.setWordWrap(True)
         self._inline_error.hide()
         root.addWidget(self._inline_error)
+
+        self._login_card = QFrame()
+        self._login_card.setObjectName("insetCard")
+        login_layout = QVBoxLayout(self._login_card)
+        login_layout.setContentsMargins(12, 12, 12, 12)
+        login_layout.setSpacing(8)
+        login_title = QLabel("Sign in to Cursor")
+        login_title.setObjectName("sectionTitle")
+        login_layout.addWidget(login_title)
+        self._login_body = QLabel(
+            "Open Cursor in your browser and sign in. "
+            "This window reads the session when you come back."
+        )
+        self._login_body.setObjectName("mutedLabel")
+        self._login_body.setWordWrap(True)
+        login_layout.addWidget(self._login_body)
+        self._btn_login = _pill_button("Log in to Cursor")
+        self._btn_login.setObjectName("loginButton")
+        self._btn_login.clicked.connect(self._start_browser_login)
+        login_layout.addWidget(self._btn_login)
+        self._btn_login.setMinimumWidth(self._btn_login.sizeHint().width())
+        self._login_status = QLabel()
+        self._login_status.setObjectName("mutedLabel")
+        self._login_status.setWordWrap(True)
+        self._login_status.hide()
+        login_layout.addWidget(self._login_status)
+        self._login_error = QLabel()
+        self._login_error.setObjectName("loginError")
+        self._login_error.setWordWrap(True)
+        self._login_error.hide()
+        login_layout.addWidget(self._login_error)
+        self._login_card.hide()
+        root.addWidget(self._login_card)
 
         self._personal_card = QFrame()
         self._personal_card.setObjectName("insetCard")
@@ -275,6 +338,44 @@ class UsageWidget(QWidget):
         self._rule_before_actions = _section_rule()
         root.addWidget(self._rule_before_actions)
 
+        self._token_panel = QFrame()
+        self._token_panel.setObjectName("insetCard")
+        token_layout = QVBoxLayout(self._token_panel)
+        token_layout.setContentsMargins(12, 10, 12, 10)
+        token_layout.setSpacing(6)
+        token_title = QLabel("Session token")
+        token_title.setObjectName("sectionTitle")
+        token_layout.addWidget(token_title)
+        token_hint = QLabel(
+            "Paste WorkosCursorSessionToken from DevTools → Application → Cookies → cursor.com."
+        )
+        token_hint.setObjectName("mutedLabel")
+        token_hint.setWordWrap(True)
+        token_layout.addWidget(token_hint)
+        self._token_input = QLineEdit()
+        self._token_input.setObjectName("tokenInput")
+        self._token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._token_input.setPlaceholderText("Session token")
+        self._token_input.returnPressed.connect(self._save_inline_token)
+        token_layout.addWidget(self._token_input)
+        token_actions = QHBoxLayout()
+        token_actions.setSpacing(6)
+        self._btn_token_save = _pill_button("Save")
+        self._btn_token_save.setObjectName("loginButton")
+        self._btn_token_cancel = _pill_button("Cancel")
+        token_actions.addWidget(self._btn_token_save)
+        token_actions.addWidget(self._btn_token_cancel)
+        token_layout.addLayout(token_actions)
+        self._token_error = QLabel()
+        self._token_error.setObjectName("loginError")
+        self._token_error.setWordWrap(True)
+        self._token_error.hide()
+        token_layout.addWidget(self._token_error)
+        self._token_panel.hide()
+        self._btn_token_save.clicked.connect(self._save_inline_token)
+        self._btn_token_cancel.clicked.connect(self._hide_token_editor)
+        root.addWidget(self._token_panel)
+
         self._btn_refresh = _pill_button("Refresh", _refresh_icon())
         self._btn_token = _pill_button("Set token...")
         self._btn_toggle = _pill_button("Collapse")
@@ -300,7 +401,7 @@ class UsageWidget(QWidget):
         root.addWidget(self._rule_before_metadata)
 
         self._btn_refresh.clicked.connect(self.refresh)
-        self._btn_token.clicked.connect(self._open_set_token)
+        self._btn_token.clicked.connect(self.show_token_editor)
         self._btn_toggle.clicked.connect(self.toggle_compact)
         self._btn_dashboard.clicked.connect(lambda: webbrowser.open(_DASHBOARD_URL))
         self._btn_quit.clicked.connect(self.quit_requested.emit)
@@ -329,10 +430,31 @@ class UsageWidget(QWidget):
     def _on_fetch_finished(self, _exit_code: int) -> None:
         self.reload_from_cache()
 
-    def _open_set_token(self) -> None:
-        dialog = SetTokenDialog(self, store=self._store)
-        if dialog.exec():
-            self.refresh()
+    def show_token_editor(self) -> None:
+        self._token_error.hide()
+        self._token_error.setText("")
+        self._token_panel.show()
+        self._token_input.setFocus()
+        self._resize_to_mode()
+
+    def _hide_token_editor(self) -> None:
+        self._token_input.clear()
+        self._token_error.hide()
+        self._token_error.setText("")
+        self._token_panel.hide()
+        self._resize_to_mode()
+
+    def _save_inline_token(self) -> None:
+        try:
+            self._store.set_token(self._token_input.text())
+        except TokenNormalizeError as exc:
+            self._token_error.setText(str(exc))
+            self._token_error.show()
+            self._resize_to_mode()
+            return
+        self._token_input.clear()
+        self._token_panel.hide()
+        self.refresh()
 
     def _render_view_model(self) -> None:
         vm = self._view_model
@@ -346,7 +468,7 @@ class UsageWidget(QWidget):
 
         self._team_block.setVisible(vm.show_team_row and not self._compact)
         self._on_demand_card.setVisible(vm.show_on_demand_card and not self._compact)
-        self._sync_section_rules()
+        self._apply_section_visibility()
         self._resize_to_mode()
 
         fetched = format_datetime_display(vm.fetched_at)
@@ -355,7 +477,7 @@ class UsageWidget(QWidget):
         self._meta_reset.setText(f"Next Reset:    {reset}")
 
     def _show_inline_message(self, message: str | None) -> None:
-        if message is None or message == "":
+        if self._needs_browser_login() or message is None or message == "":
             self._inline_error.hide()
             self._inline_error.setText("")
             return
@@ -431,26 +553,164 @@ class UsageWidget(QWidget):
         self._meta_reset.setText("Next Reset:    —")
 
     def _apply_compact_visibility(self) -> None:
+        self._apply_section_visibility()
+
+    def _needs_browser_login(self) -> bool:
+        return shows_browser_login(self._view_model, self._store.has_token())
+
+    def _apply_section_visibility(self) -> None:
+        login = self._needs_browser_login()
         compact = self._compact
-        self._compact_total_row.setVisible(compact)
-        self._team_block.setVisible(not compact and self._view_model.show_team_row)
-        self._gauge_block.setVisible(not compact)
-        self._on_demand_card.setVisible(not compact and self._view_model.show_on_demand_card)
-        self._summary_block.setVisible(not compact)
-        self._metadata_block.setVisible(not compact)
+        self._login_card.setVisible(login)
+        self._personal_card.setVisible(not login)
+        self._compact_total_row.setVisible(compact and not login)
+        self._team_block.setVisible(not login and not compact and self._view_model.show_team_row)
+        self._gauge_block.setVisible(not login and not compact)
+        self._on_demand_card.setVisible(
+            not login and not compact and self._view_model.show_on_demand_card
+        )
+        self._summary_block.setVisible(not login and not compact)
+        self._metadata_block.setVisible(not login and not compact)
+        self._btn_toggle.setVisible(not login)
+        self._btn_dashboard.setVisible(not login)
         self._sync_section_rules()
 
     def _sync_section_rules(self) -> None:
         """One hairline between each visible section; hidden sections take their rule with them."""
+        if self._needs_browser_login():
+            self._rule_before_team.setVisible(False)
+            self._rule_before_gauges.setVisible(False)
+            self._rule_before_on_demand.setVisible(False)
+            self._rule_before_summary.setVisible(False)
+            self._rule_before_actions.setVisible(True)
+            self._rule_before_metadata.setVisible(False)
+            return
         compact = self._compact
-        team_visible = self._team_block.isVisible()
-        on_demand_visible = self._on_demand_card.isVisible()
-        self._rule_before_team.setVisible(team_visible)
+        self._rule_before_team.setVisible(self._team_block.isVisible())
         self._rule_before_gauges.setVisible(not compact)
-        self._rule_before_on_demand.setVisible(on_demand_visible)
+        self._rule_before_on_demand.setVisible(self._on_demand_card.isVisible())
         self._rule_before_summary.setVisible(not compact)
         self._rule_before_actions.setVisible(True)
         self._rule_before_metadata.setVisible(not compact)
+
+    def _start_browser_login(self) -> None:
+        import time
+
+        webbrowser.open(_LOGIN_URL)
+        self._login_waiting = True
+        self._login_deadline_ms = int(time.monotonic() * 1000) + _LOGIN_WAIT_MS
+        self._login_error.hide()
+        self._login_error.setText("")
+        self._login_status.setText(
+            "Sign in in the browser, then return to this window. "
+            "The session is read automatically."
+        )
+        self._login_status.show()
+        self._set_login_spinner(True)
+        self._resize_to_mode()
+        self._hook_window_activation()
+        if not self._login_timer.isActive():
+            self._login_timer.start()
+        self._attempt_browser_import()
+
+    def _hook_window_activation(self) -> None:
+        window = self.window()
+        if window is None or self._activation_hooked:
+            return
+        window.installEventFilter(self)
+        self._activation_hooked = True
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if (
+            self._login_waiting
+            and event.type() == QEvent.Type.WindowActivate
+            and watched is self.window()
+        ):
+            self._attempt_browser_import()
+        return False
+
+    def _attempt_browser_import(self) -> None:
+        import time
+
+        if not self._login_waiting or self._login_busy:
+            return
+        if int(time.monotonic() * 1000) >= self._login_deadline_ms:
+            self._finish_login_failed(
+                "Could not read a Cursor session from the browser. Set the token manually."
+            )
+            return
+        self._login_busy = True
+
+        def task() -> None:
+            try:
+                result = import_session_token_from_browsers()
+            except BrowserImportError as exc:
+                self._login_import_failed.emit(str(exc))
+                return
+            except Exception:
+                self._login_import_failed.emit("Could not read the browser session.")
+                return
+            self._login_imported.emit(result.token)
+
+        import threading
+
+        threading.Thread(target=task, name="cursor-usage-login-import", daemon=True).start()
+
+    def _on_import_success(self, token: str) -> None:
+        self._login_busy = False
+        if not self._login_waiting:
+            return
+        try:
+            self._store.set_token(token)
+        except Exception as exc:
+            self._finish_login_failed(str(exc))
+            return
+        self._stop_login_wait()
+        self._login_error.hide()
+        self._login_status.setText("Session saved. Refreshing usage…")
+        self._login_status.show()
+        self._resize_to_mode()
+        self.refresh()
+
+    def _on_import_error(self, message: str) -> None:
+        self._login_busy = False
+        if not self._login_waiting:
+            return
+        if not is_retryable_import_error(BrowserImportError(message)):
+            self._finish_login_failed(message)
+            return
+        self._login_status.setText(
+            "Still waiting for a cursor.com session. Finish signing in, then return here."
+        )
+        self._resize_to_mode()
+
+    def _finish_login_failed(self, message: str) -> None:
+        self._stop_login_wait()
+        self._login_status.hide()
+        self._login_status.setText("")
+        self._login_error.setText(_login_failure_text(message))
+        self._login_error.show()
+        self._resize_to_mode()
+
+    def _stop_login_wait(self) -> None:
+        self._login_waiting = False
+        self._login_timer.stop()
+        self._set_login_spinner(False)
+
+    def _set_login_spinner(self, active: bool) -> None:
+        if active:
+            self._spinner_index = 0
+            self._btn_login.setEnabled(False)
+            self._btn_login.setText(_SPINNER_FRAMES[0])
+            self._spinner_timer.start()
+            return
+        self._spinner_timer.stop()
+        self._btn_login.setEnabled(True)
+        self._btn_login.setText("Log in to Cursor")
+
+    def _advance_login_spinner(self) -> None:
+        self._spinner_index = (self._spinner_index + 1) % len(_SPINNER_FRAMES)
+        self._btn_login.setText(_SPINNER_FRAMES[self._spinner_index])
 
     def _update_toggle_button(self) -> None:
         if self._compact:
@@ -535,6 +795,21 @@ QLabel#inlineError {
     color: #fca5a5;
     font-size: 11px;
 }
+QLineEdit#tokenInput {
+    background-color: #2b2b2d;
+    color: #f4f4f5;
+    border: 1px solid #52545a;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+    selection-background-color: #16e7ee;
+    selection-color: #041316;
+}
+QLabel#loginError {
+    color: #ee6854;
+    font-size: 12px;
+    font-weight: 600;
+}
 QFrame#insetCard {
     background-color: #38393c;
     border: 1px solid #38393c;
@@ -576,7 +851,29 @@ QPushButton#toggleButton {
 QPushButton#quitButton {
     color: #e7c4b8;
 }
+QPushButton#loginButton {
+    color: #041316;
+    background-color: #16e7ee;
+    border: 1px solid #16e7ee;
+    font-weight: 700;
+}
+QPushButton#loginButton:hover {
+    background-color: #5ef3f8;
+}
 """
+
+
+def _login_failure_text(message: str) -> str:
+    lowered = message.lower()
+    if "appbound" in lowered or "decrypt" in lowered or "running as admin" in lowered:
+        return (
+            "Couldn’t read the browser session. Windows blocked cookie access. "
+            "Use Set token and paste WorkosCursorSessionToken from DevTools."
+        )
+    return (
+        "No Cursor session was found. Sign in in the browser and try again, "
+        "or use Set token to paste it manually."
+    )
 
 
 def _section_rule() -> QWidget:

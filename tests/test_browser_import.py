@@ -5,6 +5,7 @@ import pytest
 from cursor_usage_app.auth.browser_import import (
     BrowserImportError,
     import_session_token_from_browsers,
+    is_retryable_import_error,
 )
 
 
@@ -65,3 +66,10 @@ def test_import_browser_cookie3_fallback(monkeypatch) -> None:
     result = import_session_token_from_browsers()
     assert result.token == "edge-token"
     assert result.source == "browser_cookie3:edge"
+
+
+def test_missing_cookie_is_retryable_decrypt_failure_is_not() -> None:
+    missing = BrowserImportError("No WorkosCursorSessionToken found.")
+    blocked = BrowserImportError("Could not decrypt brave cookies (appbound encryption).")
+    assert is_retryable_import_error(missing) is True
+    assert is_retryable_import_error(blocked) is False

@@ -95,11 +95,20 @@ def _view_model_from_error(envelope: CacheEnvelopeError) -> WidgetViewModel:
 
 def _inline_for_code(code: str, message: str) -> str:
     if code == "not_authenticated":
-        return "Not signed in. Set a session token to fetch usage."
+        return "Not signed in. Log in with your browser, or set a session token."
     if code == "invalid_token":
-        return "Session token invalid or expired. Set a new token."
+        return "Session token invalid or expired. Log in again, or set a new token."
     if code == "network":
         return f"Network error: {message}"
     if code == "blocked_or_waf":
         return "Request blocked. Try again later or sign in via browser."
     return message or "Something went wrong."
+
+
+def shows_browser_login(view_model: WidgetViewModel, has_stored_token: bool) -> bool:
+    """True when the widget should offer browser login instead of usage data."""
+    if view_model.phase == "loading":
+        return False
+    if view_model.error_code in ("not_authenticated", "invalid_token"):
+        return True
+    return view_model.snapshot is None and not has_stored_token

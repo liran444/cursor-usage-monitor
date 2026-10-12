@@ -34,4 +34,27 @@ def test_auth_error_inline_message() -> None:
     )
     assert vm.phase == "error"
     assert vm.inline_message is not None
-    assert "token" in vm.inline_message.lower()
+    assert "log in" in vm.inline_message.lower()
+
+
+def test_invalid_token_offers_browser_login() -> None:
+    from cursor_usage_app.app.widget.view_model import shows_browser_login
+
+    vm = view_model_from_envelope(
+        CacheEnvelopeError(
+            ok=False,
+            error=CacheError(code="invalid_token", message="expired"),
+            fetched_at=utc_now_iso(),
+        ),
+    )
+    assert shows_browser_login(vm, has_stored_token=True) is True
+
+
+def test_ok_snapshot_does_not_offer_browser_login() -> None:
+    from cursor_usage_app.app.widget.view_model import shows_browser_login
+
+    snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_personal_only.json"))
+    vm = view_model_from_envelope(
+        CacheEnvelopeOk(ok=True, data=snapshot, fetched_at=utc_now_iso()),
+    )
+    assert shows_browser_login(vm, has_stored_token=False) is False

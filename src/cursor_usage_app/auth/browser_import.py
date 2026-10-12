@@ -136,6 +136,14 @@ def _is_chromium_appbound_error(exc: BaseException) -> bool:
     return "appbound" in text or "running as admin" in text
 
 
+def is_retryable_import_error(exc: BrowserImportError) -> bool:
+    """Cookie not present yet (user still signing in). Decrypt failures are not retried."""
+    text = str(exc).lower()
+    if "appbound" in text or "decrypt" in text or "running as admin" in text:
+        return False
+    return True
+
+
 def _appbound_help_message(browser_label: str) -> str:
     return (
         f"Could not decrypt {browser_label} cookies on this Windows build (Chromium app-bound "

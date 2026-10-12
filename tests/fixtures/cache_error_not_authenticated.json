@@ -1,0 +1,8 @@
+{
+  "ok": false,
+  "error": {
+    "code": "not_authenticated",
+    "message": "No session token available"
+  },
+  "fetchedAt": "2026-10-08T09:52:28+00:00"
+}

@@ -1,0 +1,8 @@
+{
+  "ok": false,
+  "error": {
+    "code": "invalid_token",
+    "message": "Session token invalid or expired"
+  },
+  "fetchedAt": "2026-10-08T09:52:28+00:00"
+}

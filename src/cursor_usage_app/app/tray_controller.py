@@ -14,7 +14,6 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from cursor_usage_app.app.tray_ring import render_tray_ring_icon, tray_ring_display_from_envelope
 from cursor_usage_app.app.tray_tooltip import build_tray_tooltip
 from cursor_usage_app.app.widget.fetch_worker import load_cache, start_fetch_in_thread
-from cursor_usage_app.app.widget.set_token_dialog import SetTokenDialog
 from cursor_usage_app.app.widget.usage_window import UsageWindow
 from cursor_usage_app.auth.browser_import import BrowserImportError, import_session_token_from_browsers
 from cursor_usage_app.auth.session_store import SessionStore
@@ -141,9 +140,17 @@ class TrayController(QObject):
             )
 
     def _open_set_token(self) -> None:
-        dialog = SetTokenDialog(parent=self._window, store=self._store)
-        if dialog.exec():
-            self.refresh()
+        self._reveal_widget()
+        self._window.widget().show_token_editor()
+
+    def _reveal_widget(self) -> None:
+        if not self._widget_positioned:
+            self._window.position_near_cursor()
+            self._widget_positioned = True
+        self._window.widget().reload_from_cache()
+        self._window.show()
+        self._window.raise_()
+        self._window.activateWindow()
 
     def refresh(self) -> None:
         self._fetch_runner = start_fetch_in_thread(

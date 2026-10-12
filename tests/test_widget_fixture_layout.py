@@ -50,5 +50,20 @@ def test_widget_team_fixture_layout(qapp) -> None:
 def test_widget_error_envelope_does_not_crash(qapp) -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     widget = UsageWidget()
-    widget.load_fixture_file(FIXTURES_DIR / "cache_error_auth.json")
+    widget.load_fixture_file(FIXTURES_DIR / "cache_error_not_authenticated.json")
     assert widget.isVisible() or True
+
+
+def test_widget_invalid_token_fixture_shows_auth_message(qapp) -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    widget = UsageWidget()
+    widget.load_fixture_file(FIXTURES_DIR / "cache_error_invalid_token.json")
+    assert widget._view_model.error_code == "invalid_token"
+    assert "invalid" in (widget._view_model.inline_message or "").lower()
+    assert widget._login_card.isHidden() is False
+    assert widget._btn_login.text() == "Log in to Cursor"
+    assert widget._personal_card.isHidden() is True
+    assert widget._inline_error.isHidden() is True
+    assert widget._btn_toggle.isHidden() is True
+    assert widget._btn_dashboard.isHidden() is True
+    assert widget._token_panel.isHidden() is True
