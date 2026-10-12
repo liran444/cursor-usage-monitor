@@ -572,7 +572,8 @@ class UsageWidget(QWidget):
         self._summary_block.setVisible(not login and not compact)
         self._metadata_block.setVisible(not login and not compact)
         self._btn_toggle.setVisible(not login)
-        self._btn_dashboard.setVisible(not login)
+        self._btn_token.setVisible(login)
+        self._btn_dashboard.setVisible(not login and not compact)
         self._sync_section_rules()
 
     def _sync_section_rules(self) -> None:
