@@ -37,6 +37,17 @@ def test_personal_only_on_demand_card() -> None:
     assert display.on_demand_used_usd == 3.5
 
 
+def test_personal_pool_from_plan_when_individual_totals_missing() -> None:
+    snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_plan_pool.json"))
+
+    assert snapshot.personal.used_usd == pytest.approx(3.16)
+    assert snapshot.personal.limit_usd == pytest.approx(20.0)
+    assert snapshot.plan_percents.total_percent_used == pytest.approx(0.638383838383838)
+    assert snapshot.personal_on_demand is not None
+    assert snapshot.personal_on_demand.used_usd == 0.0
+    assert snapshot.on_demand_display.show_card is False
+
+
 def test_hides_on_demand_when_absent() -> None:
     snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_no_on_demand.json"))
 

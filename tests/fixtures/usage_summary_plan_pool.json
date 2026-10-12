@@ -1,0 +1,21 @@
+{
+  "billingCycleEnd": "2026-11-10T15:34:45.000Z",
+  "individualUsage": {
+    "plan": {
+      "enabled": true,
+      "used": 316,
+      "limit": 2000,
+      "remaining": 1684,
+      "autoPercentUsed": 0.702222222222222,
+      "apiPercentUsed": 0,
+      "totalPercentUsed": 0.638383838383838
+    },
+    "onDemand": {
+      "enabled": false,
+      "used": 0,
+      "limit": null,
+      "remaining": null
+    }
+  },
+  "teamUsage": {}
+}

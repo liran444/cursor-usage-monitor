@@ -81,7 +81,7 @@ class TrayController(QObject):
         token_action.triggered.connect(self._open_set_token)
         menu.addAction(token_action)
 
-        dashboard_action = QAction("Open dashboard", menu)
+        dashboard_action = QAction("Dashboard", menu)
         dashboard_action.triggered.connect(lambda: webbrowser.open(_DASHBOARD_URL))
         menu.addAction(dashboard_action)
 

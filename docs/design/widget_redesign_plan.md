@@ -17,7 +17,7 @@ Redesign the Cursor Usage Monitor widget interface to faithfully match the dark 
   - `[ 🔄 Refresh ]`: Instantly trigger fetch and update widget data.
   - `[ Set token... ]`: Launch session token configuration.
   - `[ Collapse ]` / `[ Expand ]`: Modern, user-friendly toggle between full details and compact/minimal view.
-  - `[ Open dashboard ]`: Open `https://cursor.com/dashboard/usage` in browser.
+  - `[ Dashboard ]`: Open `https://cursor.com/dashboard/usage` in browser.
   - `[ 🚪 Quit ]`: Cleanly terminate application.
 - **Metadata Section & Readable 24h Formatting**:
   - Readable format: `<Date> at <Time>` (e.g., `Thu 8 Oct 2026 at 12:52:28`).
@@ -89,7 +89,7 @@ Redesign the Cursor Usage Monitor widget interface to faithfully match the dark 
 |                                                     |
 |  Dashboard API Metrics                              |
 |  [ 🔄 Refresh ]       [ Set token... ]              |
-|  [ Collapse ]         [ Open dashboard ]   [ 🚪 Quit ]
+|  [ Collapse ]         [ Dashboard ]   [ 🚪 Quit ]   |
 |                                                     |
 |  Metadata                                           |
 |  Status & Resets                                    |

@@ -22,9 +22,14 @@ class UsageSummaryMapper:
         team = _as_dict(payload.get("teamUsage"))
         plan = _as_dict(individual.get("plan"))
 
+        personal_used = _to_usd_from_api_cents(individual.get("used"))
+        personal_limit = _to_usd_from_api_cents(individual.get("limit"))
+        if personal_used is None and personal_limit is None:
+            personal_used = _to_usd_from_api_cents(plan.get("used"))
+            personal_limit = _to_usd_from_api_cents(plan.get("limit"))
         personal = UsagePool(
-            used_usd=_to_float(individual.get("used")),
-            limit_usd=_to_float(individual.get("limit")),
+            used_usd=personal_used,
+            limit_usd=personal_limit,
         )
         plan_percents = PlanPercents(
             total_percent_used=_to_float(plan.get("totalPercentUsed")),
@@ -35,8 +40,8 @@ class UsageSummaryMapper:
         team_pool: UsagePool | None = None
         if team:
             team_pool = UsagePool(
-                used_usd=_to_float(team.get("used")),
-                limit_usd=_to_float(team.get("limit")),
+                used_usd=_to_usd_from_api_cents(team.get("used")),
+                limit_usd=_to_usd_from_api_cents(team.get("limit")),
             )
             if not _pool_meaningful(team_pool):
                 team_pool = None
@@ -127,12 +132,14 @@ def _pool_from_on_demand(on_demand: dict[str, Any]) -> UsagePool | None:
     if not on_demand:
         return None
     pool = UsagePool(
-        used_usd=_to_float(on_demand.get("used")),
-        limit_usd=_to_float(on_demand.get("limit")),
+        used_usd=_to_usd_from_api_cents(on_demand.get("used")),
+        limit_usd=_to_usd_from_api_cents(on_demand.get("limit")),
     )
-    if not _pool_meaningful(pool) and not pool.has_limit:
-        return None
-    return pool
+    if pool.has_limit:
+        return pool
+    if pool.used_usd is not None:
+        return pool
+    return None
 
 
 def _pool_meaningful(pool: UsagePool) -> bool:
@@ -171,6 +178,14 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _to_usd_from_api_cents(value: Any) -> float | None:
+    """usage-summary monetary fields are integer (or fractional) cents."""
+    raw = _to_float(value)
+    if raw is None:
+        return None
+    return raw / 100.0
 
 
 def _optional_str(value: Any) -> str | None:

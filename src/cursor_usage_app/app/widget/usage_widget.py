@@ -245,7 +245,7 @@ class UsageWidget(QWidget):
         self._btn_token = QPushButton("Set token...")
         self._btn_toggle = QPushButton("Collapse")
         self._btn_toggle.setStyleSheet(f"color: {colors.AMBER.name()}; font-weight: 600;")
-        self._btn_dashboard = QPushButton("Open dashboard")
+        self._btn_dashboard = QPushButton("Dashboard")
         self._btn_quit = QPushButton("🚪 Quit")
 
         btn_grid.addWidget(self._btn_refresh, 0, 0)

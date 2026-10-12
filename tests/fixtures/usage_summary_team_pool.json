@@ -1,24 +1,24 @@
 {
   "billingCycleEnd": "2026-04-01T00:00:00.000Z",
   "individualUsage": {
-    "used": 18.75,
-    "limit": 20.0,
+    "used": 1875,
+    "limit": 2000,
     "plan": {
       "totalPercentUsed": 64.0,
       "apiPercentUsed": 38.0,
       "autoPercentUsed": 26.0
     },
     "onDemand": {
-      "used": 4.25,
+      "used": 425,
       "limit": 0
     }
   },
   "teamUsage": {
-    "used": 412.5,
-    "limit": 800.0,
+    "used": 41250,
+    "limit": 80000,
     "onDemand": {
-      "used": 55.0,
-      "limit": 200.0
+      "used": 5500,
+      "limit": 20000
     }
   }
 }

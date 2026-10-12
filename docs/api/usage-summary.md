@@ -14,17 +14,19 @@ Fields read by `UsageSummaryMapper`:
 | JSON path | Type | Mapped to |
 | --- | --- | --- |
 | `billingCycleEnd` | string (ISO-8601) | `UsageSnapshot.billing_cycle_end` |
-| `individualUsage.used` | number | Personal pool `used_usd` |
-| `individualUsage.limit` | number | Personal pool `limit_usd` |
+| `individualUsage.used` | number (cents) | Personal pool `used_usd` (÷ 100) |
+| `individualUsage.limit` | number (cents) | Personal pool `limit_usd` (÷ 100) |
+| `individualUsage.plan.used` | number (cents) | Personal pool `used_usd` when top-level `used`/`limit` absent |
+| `individualUsage.plan.limit` | number (cents) | Personal pool `limit_usd` when top-level `used`/`limit` absent |
 | `individualUsage.plan.totalPercentUsed` | number | Dashboard TOTAL % (tray ring, widget) |
 | `individualUsage.plan.apiPercentUsed` | number | API segment of TOTAL arc |
 | `individualUsage.plan.autoPercentUsed` | number | Auto segment of TOTAL arc |
-| `individualUsage.onDemand.used` | number | Personal on-demand spend (subcopy) |
-| `individualUsage.onDemand.limit` | number | Personal on-demand pool limit |
-| `teamUsage.used` | number | Team pool `used_usd` (row hidden if absent) |
-| `teamUsage.limit` | number | Team pool `limit_usd` |
-| `teamUsage.onDemand.used` | number | Team on-demand spend (progress when team pool exists) |
-| `teamUsage.onDemand.limit` | number | Team on-demand pool limit |
+| `individualUsage.onDemand.used` | number (cents) | Personal on-demand spend (subcopy) |
+| `individualUsage.onDemand.limit` | number (cents) | Personal on-demand pool limit |
+| `teamUsage.used` | number (cents) | Team pool `used_usd` (row hidden if absent) |
+| `teamUsage.limit` | number (cents) | Team pool `limit_usd` |
+| `teamUsage.onDemand.used` | number (cents) | Team on-demand spend (progress when team pool exists) |
+| `teamUsage.onDemand.limit` | number (cents) | Team on-demand pool limit |
 
 `teamUsage` may be omitted for personal-only accounts.
 
