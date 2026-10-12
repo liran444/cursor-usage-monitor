@@ -35,10 +35,18 @@ class SessionStore:
         self._fallback_path = fallback_path or _default_fallback_path()
 
     def get_token(self) -> str | None:
-        token = self._get_from_keyring()
-        if token is not None:
-            return token
-        return self._get_from_fallback_file()
+        keyring_token = self._get_from_keyring()
+        file_token = self._get_from_fallback_file()
+        best = _pick_best_token(keyring_token, file_token)
+        if (
+            best is not None
+            and file_token is not None
+            and best == file_token
+            and keyring_token is not None
+            and keyring_token != best
+        ):
+            self._set_keyring(best)
+        return best
 
     def set_token(self, raw_token: str) -> None:
         token = normalize_session_token(raw_token)
@@ -108,6 +116,25 @@ class SessionStore:
                 path.unlink()
         except OSError as exc:
             _LOGGER.debug("Fallback token delete failed: %s", exc.__class__.__name__)
+
+
+def _pick_best_token(
+    keyring_token: str | None,
+    file_token: str | None,
+) -> str | None:
+    candidates = [t for t in (keyring_token, file_token) if t is not None and t.strip() != ""]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    return max(candidates, key=_token_quality_score)
+
+
+def _token_quality_score(token: str) -> int:
+    score = len(token)
+    if "::" in token:
+        score += 10_000
+    return score
 
 
 def _default_fallback_path() -> Path:

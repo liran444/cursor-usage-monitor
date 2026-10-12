@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QGuiApplication, QKeyEvent, QMouseEvent, QPainter, QPen
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QKeyEvent, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
 from cursor_usage_app.app.widget import colors
@@ -20,6 +20,7 @@ class UsageWindow(QWidget):
         self,
         cache_path: Path | None = None,
         store: SessionStore | None = None,
+        auto_center: bool = True,
     ) -> None:
         super().__init__()
         self._drag_offset = None
@@ -36,7 +37,8 @@ class UsageWindow(QWidget):
         self._card.compact_changed.connect(lambda _c: self.resize_for_content())
 
         self.resize_for_content()
-        self._center_on_screen()
+        if auto_center:
+            self._center_on_screen()
 
     def widget(self) -> UsageWidget:
         return self._card
@@ -91,3 +93,18 @@ class UsageWindow(QWidget):
             geo.x() + (geo.width() - self.width()) // 2,
             geo.y() + (geo.height() - self.height()) // 2,
         )
+
+    def position_near_cursor(self) -> None:
+        """Place window above the cursor (session-only; persisted in Phase 5)."""
+        cursor_pos = QCursor.pos()
+        screen = QGuiApplication.screenAt(cursor_pos)
+        if screen is None:
+            screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        geo = screen.availableGeometry()
+        x = cursor_pos.x() - self.width() // 2
+        y = cursor_pos.y() - self.height() - 16
+        x = max(geo.x(), min(x, geo.right() - self.width()))
+        y = max(geo.y(), min(y, geo.bottom() - self.height()))
+        self.move(x, y)

@@ -31,6 +31,16 @@ def test_clear_removes_keyring_and_file(fake_keyring, tmp_path: Path) -> None:
     assert not fallback.is_file()
 
 
+def test_prefers_full_token_in_file_over_stale_keyring(fake_keyring, tmp_path: Path) -> None:
+    fallback = tmp_path / "session_token"
+    full = "user_01::" + ("x" * 400)
+    fallback.write_text(full, encoding="utf-8")
+    fake_keyring.set_password("cursor-usage-app", "WorkosCursorSessionToken", "stale-short-keyring-value")
+    store = SessionStore(fallback_path=fallback)
+    assert store.get_token() == full
+    assert fake_keyring.get_password("cursor-usage-app", "WorkosCursorSessionToken") == full
+
+
 def test_set_rejects_invalid_token(fake_keyring, tmp_path: Path) -> None:
     store = SessionStore(fallback_path=tmp_path / "session_token")
     with pytest.raises(TokenNormalizeError):

@@ -61,15 +61,20 @@ def _try_rookiepy() -> BrowserImportResult | None:
         ("brave", rookiepy.brave),
         ("firefox", rookiepy.firefox),
     ]
+    last_appbound: str | None = None
     for label, loader in browsers:
         try:
             cookies = loader()
         except Exception as exc:
+            if _is_chromium_appbound_error(exc):
+                last_appbound = label
             _LOGGER.debug("rookiepy %s failed: %s", label, exc.__class__.__name__)
             continue
         match = _find_session_cookie(cookies)
         if match is not None:
             return BrowserImportResult(token=match, source=f"rookiepy:{label}")
+    if last_appbound is not None:
+        raise BrowserImportError(_appbound_help_message(last_appbound))
     return None
 
 
@@ -124,6 +129,19 @@ def _find_session_in_jar(jar: object) -> str | None:
         if value != "":
             return value
     return None
+
+
+def _is_chromium_appbound_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return "appbound" in text or "running as admin" in text
+
+
+def _appbound_help_message(browser_label: str) -> str:
+    return (
+        f"Could not decrypt {browser_label} cookies on this Windows build (Chromium app-bound "
+        "encryption). Close the browser, run Import session from an elevated terminal, or use "
+        "Set token with the WorkosCursorSessionToken value from DevTools."
+    )
 
 
 def _domain_matches(domain: str) -> bool:
