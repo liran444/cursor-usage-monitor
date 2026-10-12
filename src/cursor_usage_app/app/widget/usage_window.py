@@ -53,7 +53,7 @@ class UsageWindow(QWidget):
         rect = self.rect().adjusted(1, 1, -1, -1)
         painter.setBrush(colors.BG_WINDOW)
         painter.setPen(QPen(colors.BORDER_WINDOW, 1))
-        painter.drawRoundedRect(rect, 16, 16)
+        painter.drawRoundedRect(rect, 18, 18)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)

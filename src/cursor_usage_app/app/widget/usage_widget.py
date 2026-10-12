@@ -5,10 +5,10 @@ from __future__ import annotations
 import webbrowser
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -58,7 +58,10 @@ class UsageWidget(QWidget):
         self._view_model = view_model_from_envelope(None)
         self._fetch_thread = None
 
+        self.setObjectName("usageRoot")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedWidth(_WIDGET_WIDTH)
+        self.setStyleSheet(_ROOT_STYLESHEET)
         self._build_ui()
         self.reload_from_cache()
 
@@ -86,10 +89,17 @@ class UsageWidget(QWidget):
         self._render_view_model()
 
     def load_fixture_file(self, path: Path) -> None:
-        """Test/dev hook: load cache JSON from disk."""
+        """Load a cache envelope or a raw usage-summary API payload."""
         import json
 
         raw = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and "ok" not in raw and "individualUsage" in raw:
+            from cursor_usage_app.cache.usage_cache import CacheEnvelopeOk, utc_now_iso
+            from cursor_usage_app.domain.mapper import UsageSummaryMapper
+
+            snapshot = UsageSummaryMapper.from_api_payload(raw)
+            self.apply_envelope(CacheEnvelopeOk(ok=True, data=snapshot, fetched_at=utc_now_iso()))
+            return
         envelope = parse_cache_envelope(raw)
         self.apply_envelope(envelope)
 
@@ -108,152 +118,186 @@ class UsageWidget(QWidget):
         )
 
     def preferred_height(self) -> int:
-        return _COMPACT_HEIGHT if self._compact else _FULL_HEIGHT
+        layout = self.layout()
+        if layout is None:
+            return _COMPACT_HEIGHT if self._compact else _FULL_HEIGHT
+        layout.invalidate()
+        layout.activate()
+        return layout.sizeHint().height()
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(10)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
 
         self._inline_error = QLabel()
+        self._inline_error.setObjectName("inlineError")
         self._inline_error.setWordWrap(True)
-        self._inline_error.setStyleSheet(f"color: {colors.ERROR_TEXT.name()}; font-size: 11px;")
         self._inline_error.hide()
         root.addWidget(self._inline_error)
 
-        # Personal
+        self._personal_card = QFrame()
+        self._personal_card.setObjectName("insetCard")
+        personal_layout = QVBoxLayout(self._personal_card)
+        personal_layout.setContentsMargins(12, 10, 12, 10)
+        personal_layout.setSpacing(4)
+
         self._personal_header = QLabel("Personal")
-        self._personal_header.setStyleSheet("font-size: 13px; font-weight: 600; color: #e5e7eb;")
-        root.addWidget(self._personal_header)
+        self._personal_header.setObjectName("sectionLabel")
+        personal_layout.addWidget(self._personal_header)
 
         personal_row = QHBoxLayout()
+        personal_row.setSpacing(8)
         self._personal_amount = QLabel()
-        self._personal_amount.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self._personal_amount.setObjectName("amountLabel")
         self._personal_pct = QLabel()
-        self._personal_pct.setStyleSheet(f"color: {colors.CYAN.name()}; font-weight: bold;")
+        self._personal_pct.setObjectName("cyanPercent")
         personal_row.addWidget(self._personal_amount)
         personal_row.addStretch()
         personal_row.addWidget(self._personal_pct)
-        root.addLayout(personal_row)
+        personal_layout.addLayout(personal_row)
 
         self._personal_bar = HorizontalBar(colors.CYAN)
-        root.addWidget(self._personal_bar)
+        personal_layout.addWidget(self._personal_bar)
+        root.addWidget(self._personal_card)
+
+        self._rule_before_team = _section_rule()
+        root.addWidget(self._rule_before_team)
 
         # Compact mini total
         self._compact_total_row = QWidget()
         compact_layout = QHBoxLayout(self._compact_total_row)
-        compact_layout.setContentsMargins(0, 0, 0, 0)
-        compact_layout.addWidget(QLabel("TOTAL"))
+        compact_layout.setContentsMargins(0, 4, 0, 0)
+        total_caption = QLabel("TOTAL")
+        total_caption.setObjectName("mutedLabel")
+        compact_layout.addWidget(total_caption)
         self._mini_total = MiniTotalGauge()
         compact_layout.addWidget(self._mini_total)
         compact_layout.addStretch()
         self._compact_total_pct = QLabel()
-        self._compact_total_pct.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self._compact_total_pct.setObjectName("amountLabel")
         compact_layout.addWidget(self._compact_total_pct)
         root.addWidget(self._compact_total_row)
 
         # Team
         self._team_block = QWidget()
         team_layout = QVBoxLayout(self._team_block)
-        team_layout.setContentsMargins(0, 0, 0, 0)
-        team_layout.setSpacing(6)
+        team_layout.setContentsMargins(4, 2, 4, 0)
+        team_layout.setSpacing(2)
         self._team_header = QLabel("Team")
-        self._team_header.setStyleSheet("font-size: 13px; font-weight: 600;")
+        self._team_header.setObjectName("teamLabel")
         team_layout.addWidget(self._team_header)
         team_row = QHBoxLayout()
+        team_row.setSpacing(6)
+        self._team_icon = QLabel()
+        self._team_icon.setPixmap(_people_icon_pixmap())
+        self._team_icon.setFixedSize(16, 16)
         self._team_amount = QLabel()
-        self._team_amount.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self._team_amount.setObjectName("amountLabel")
         self._team_pct = QLabel()
-        self._team_pct.setStyleSheet(f"color: {colors.GREEN.name()}; font-weight: bold;")
+        self._team_pct.setObjectName("greenPercent")
+        team_row.addWidget(self._team_icon, alignment=Qt.AlignmentFlag.AlignVCenter)
         team_row.addWidget(self._team_amount)
         team_row.addStretch()
         team_row.addWidget(self._team_pct)
         team_layout.addLayout(team_row)
         root.addWidget(self._team_block)
 
+        self._rule_before_gauges = _section_rule()
+        root.addWidget(self._rule_before_gauges)
+
         # Gauges
         self._gauge_block = QWidget()
         gauge_outer = QVBoxLayout(self._gauge_block)
-        gauge_outer.setContentsMargins(0, 0, 0, 0)
+        gauge_outer.setContentsMargins(2, 4, 2, 4)
+        gauge_outer.setSpacing(10)
         gauge_title = QLabel("Dashboard API Breakdown")
-        gauge_title.setStyleSheet("font-size: 13px; font-weight: 600;")
+        gauge_title.setObjectName("sectionTitle")
         gauge_outer.addWidget(gauge_title)
 
         gauge_row = QHBoxLayout()
+        gauge_row.setSpacing(4)
         self._total_gauge = SegmentedTotalGauge()
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.VLine)
-        divider.setStyleSheet(f"color: {colors.BORDER_WINDOW.name()};")
-        divider.setFixedWidth(1)
         self._api_gauge = DonutGauge("API", colors.CYAN)
         self._auto_gauge = DonutGauge("AUTO", colors.VIOLET)
+        gauge_row.addStretch(1)
         gauge_row.addWidget(self._total_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
-        gauge_row.addWidget(divider)
         gauge_row.addWidget(self._api_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
         gauge_row.addWidget(self._auto_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
+        gauge_row.addStretch(1)
         gauge_outer.addLayout(gauge_row)
         root.addWidget(self._gauge_block)
 
+        self._rule_before_on_demand = _section_rule()
+        root.addWidget(self._rule_before_on_demand)
+
         # On demand card
         self._on_demand_card = QFrame()
-        self._on_demand_card.setStyleSheet(
-            f"background: {colors.BG_CARD.name()}; border: 1px solid {colors.BORDER_CARD.name()}; "
-            "border-radius: 8px;"
-        )
+        self._on_demand_card.setObjectName("onDemandCard")
         od_layout = QVBoxLayout(self._on_demand_card)
-        od_layout.setContentsMargins(10, 10, 10, 10)
+        od_layout.setContentsMargins(12, 10, 12, 10)
+        od_layout.setSpacing(5)
         od_header = QHBoxLayout()
         od_title = QLabel("On Demand Usage")
-        od_title.setStyleSheet("font-weight: 600;")
+        od_title.setObjectName("cardTitle")
         self._od_pct = QLabel()
-        self._od_pct.setStyleSheet(f"color: {colors.CORAL.name()}; font-weight: bold;")
+        self._od_pct.setObjectName("coralPercent")
         od_header.addWidget(od_title)
         od_header.addStretch()
         od_header.addWidget(self._od_pct)
         od_layout.addLayout(od_header)
         self._od_subcopy = QLabel()
-        self._od_subcopy.setStyleSheet(f"color: {colors.TEXT_MUTED.name()}; font-size: 11px;")
+        self._od_subcopy.setObjectName("mutedLabel")
         od_layout.addWidget(self._od_subcopy)
         self._od_bar = HorizontalBar(colors.CORAL)
         od_layout.addWidget(self._od_bar)
         self._od_footer = QLabel()
-        self._od_footer.setStyleSheet("font-size: 11px;")
+        self._od_footer.setObjectName("cardFooter")
         od_layout.addWidget(self._od_footer)
         root.addWidget(self._on_demand_card)
+
+        self._rule_before_summary = _section_rule()
+        root.addWidget(self._rule_before_summary)
 
         # Summary lines
         self._summary_block = QWidget()
         summary_layout = QVBoxLayout(self._summary_block)
-        summary_layout.setContentsMargins(0, 0, 0, 0)
+        summary_layout.setContentsMargins(0, 6, 0, 0)
+        summary_layout.setSpacing(2)
         self._summary_personal = QLabel()
         self._summary_personal_od = QLabel()
         self._summary_team = QLabel()
         for label in (self._summary_personal, self._summary_personal_od, self._summary_team):
-            label.setStyleSheet(f"color: {colors.TEXT_MUTED.name()}; font-size: 11px;")
+            label.setObjectName("mutedLabel")
             summary_layout.addWidget(label)
         root.addWidget(self._summary_block)
 
-        # Actions
-        actions_title = QLabel("Dashboard API Metrics")
-        actions_title.setStyleSheet("font-size: 13px; font-weight: 600;")
-        root.addWidget(actions_title)
+        self._rule_before_actions = _section_rule()
+        root.addWidget(self._rule_before_actions)
 
-        btn_grid = QGridLayout()
-        btn_grid.setHorizontalSpacing(8)
-        btn_grid.setVerticalSpacing(6)
-        self._btn_refresh = QPushButton("🔄 Refresh")
-        self._btn_token = QPushButton("Set token...")
-        self._btn_toggle = QPushButton("Collapse")
-        self._btn_toggle.setStyleSheet(f"color: {colors.AMBER.name()}; font-weight: 600;")
-        self._btn_dashboard = QPushButton("Dashboard")
-        self._btn_quit = QPushButton("🚪 Quit")
+        self._btn_refresh = _pill_button("Refresh", _refresh_icon())
+        self._btn_token = _pill_button("Set token...")
+        self._btn_toggle = _pill_button("Collapse")
+        self._btn_toggle.setObjectName("toggleButton")
+        self._btn_dashboard = _pill_button("Open dashboard")
+        self._btn_quit = _pill_button("Quit", _quit_icon())
+        self._btn_quit.setObjectName("quitButton")
 
-        btn_grid.addWidget(self._btn_refresh, 0, 0)
-        btn_grid.addWidget(self._btn_token, 0, 1)
-        btn_grid.addWidget(self._btn_toggle, 1, 0)
-        btn_grid.addWidget(self._btn_dashboard, 1, 1)
-        btn_grid.addWidget(self._btn_quit, 1, 2)
-        root.addLayout(btn_grid)
+        btn_row_top = QHBoxLayout()
+        btn_row_top.setSpacing(6)
+        btn_row_top.addWidget(self._btn_refresh, 1)
+        btn_row_top.addWidget(self._btn_token, 1)
+        root.addLayout(btn_row_top)
+
+        btn_row_bottom = QHBoxLayout()
+        btn_row_bottom.setSpacing(6)
+        btn_row_bottom.addWidget(self._btn_toggle, 1)
+        btn_row_bottom.addWidget(self._btn_dashboard, 1)
+        btn_row_bottom.addWidget(self._btn_quit, 1)
+        root.addLayout(btn_row_bottom)
+
+        self._rule_before_metadata = _section_rule()
+        root.addWidget(self._rule_before_metadata)
 
         self._btn_refresh.clicked.connect(self.refresh)
         self._btn_token.clicked.connect(self._open_set_token)
@@ -264,17 +308,18 @@ class UsageWidget(QWidget):
         # Metadata
         self._metadata_block = QWidget()
         meta_layout = QVBoxLayout(self._metadata_block)
-        meta_layout.setContentsMargins(0, 0, 0, 0)
+        meta_layout.setContentsMargins(0, 8, 0, 0)
+        meta_layout.setSpacing(2)
         meta_title = QLabel("Metadata")
-        meta_title.setStyleSheet("font-size: 13px; font-weight: 600;")
+        meta_title.setObjectName("sectionTitle")
         meta_layout.addWidget(meta_title)
         status_label = QLabel("Status & Resets")
-        status_label.setStyleSheet(f"color: {colors.TEXT_MUTED.name()}; font-size: 11px;")
+        status_label.setObjectName("sectionLabel")
         meta_layout.addWidget(status_label)
         self._meta_fetched = QLabel()
         self._meta_reset = QLabel()
         for label in (self._meta_fetched, self._meta_reset):
-            label.setStyleSheet("font-size: 11px;")
+            label.setObjectName("metaLine")
             meta_layout.addWidget(label)
         root.addWidget(self._metadata_block)
 
@@ -301,6 +346,8 @@ class UsageWidget(QWidget):
 
         self._team_block.setVisible(vm.show_team_row and not self._compact)
         self._on_demand_card.setVisible(vm.show_on_demand_card and not self._compact)
+        self._sync_section_rules()
+        self._resize_to_mode()
 
         fetched = format_datetime_display(vm.fetched_at)
         self._meta_fetched.setText(f"Last Fetched:  {fetched}")
@@ -341,7 +388,7 @@ class UsageWidget(QWidget):
         if snapshot.team_pool is not None:
             team_pct = format_pool_percent(snapshot.team_pool.used_usd, snapshot.team_pool.limit_usd)
             self._team_amount.setText(
-                f"👥 {format_usd(snapshot.team_pool.used_usd)} / "
+                f"{format_usd(snapshot.team_pool.used_usd)} / "
                 f"{format_usd(snapshot.team_pool.limit_usd)}"
             )
             self._team_pct.setText(format_percent(team_pct))
@@ -391,6 +438,19 @@ class UsageWidget(QWidget):
         self._on_demand_card.setVisible(not compact and self._view_model.show_on_demand_card)
         self._summary_block.setVisible(not compact)
         self._metadata_block.setVisible(not compact)
+        self._sync_section_rules()
+
+    def _sync_section_rules(self) -> None:
+        """One hairline between each visible section; hidden sections take their rule with them."""
+        compact = self._compact
+        team_visible = self._team_block.isVisible()
+        on_demand_visible = self._on_demand_card.isVisible()
+        self._rule_before_team.setVisible(team_visible)
+        self._rule_before_gauges.setVisible(not compact)
+        self._rule_before_on_demand.setVisible(on_demand_visible)
+        self._rule_before_summary.setVisible(not compact)
+        self._rule_before_actions.setVisible(True)
+        self._rule_before_metadata.setVisible(not compact)
 
     def _update_toggle_button(self) -> None:
         if self._compact:
@@ -404,3 +464,185 @@ class UsageWidget(QWidget):
         if window is not None and hasattr(window, "resize_for_content"):
             if getattr(window, "_card", None) is not None:
                 window.resize_for_content()
+
+
+_ROOT_STYLESHEET = """
+#usageRoot {
+    background: transparent;
+    color: #f4f4f5;
+    font-family: "Segoe UI";
+    font-size: 12px;
+}
+QLabel {
+    background: transparent;
+    border: none;
+    color: #f4f4f5;
+}
+QLabel#sectionLabel {
+    color: #f2f2f3;
+    font-size: 13px;
+    font-weight: 600;
+}
+QLabel#teamLabel {
+    color: #d4d4d6;
+    font-size: 12px;
+    font-weight: 500;
+}
+QLabel#sectionTitle {
+    color: #f4f4f5;
+    font-size: 14px;
+    font-weight: 650;
+}
+QLabel#amountLabel {
+    color: #f7f7f8;
+    font-size: 16px;
+    font-weight: 700;
+}
+QLabel#cyanPercent {
+    color: #16e7ee;
+    font-size: 15px;
+    font-weight: 700;
+}
+QLabel#greenPercent {
+    color: #7dcea0;
+    font-size: 15px;
+    font-weight: 700;
+}
+QLabel#coralPercent {
+    color: #ee6854;
+    font-size: 15px;
+    font-weight: 700;
+}
+QLabel#mutedLabel {
+    color: #c4c4c6;
+    font-size: 12px;
+}
+QLabel#cardTitle {
+    color: #f4f4f5;
+    font-size: 13px;
+    font-weight: 650;
+}
+QLabel#cardFooter {
+    color: #f4f4f5;
+    font-size: 13px;
+    font-weight: 650;
+}
+QLabel#metaLine {
+    color: #c8c8ca;
+    font-size: 11px;
+}
+QLabel#inlineError {
+    color: #fca5a5;
+    font-size: 11px;
+}
+QFrame#insetCard {
+    background-color: #38393c;
+    border: 1px solid #38393c;
+    border-radius: 10px;
+}
+QFrame#onDemandCard {
+    background-color: #38393c;
+    border: 1px solid #4a4c50;
+    border-radius: 10px;
+}
+QFrame#insetCard QLabel, QFrame#onDemandCard QLabel {
+    border: none;
+    background: transparent;
+}
+QWidget#sectionRule {
+    background-color: #3e4044;
+    border: none;
+    min-height: 1px;
+    max-height: 1px;
+}
+QPushButton {
+    background-color: #3a3c3e;
+    color: #ececee;
+    border: 1px solid #52545a;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 11px;
+    min-height: 26px;
+}
+QPushButton:hover {
+    background-color: #45474b;
+}
+QPushButton#toggleButton {
+    color: #e6d3b0;
+    background-color: #6e5c42;
+    border: 1px solid #8d784f;
+    font-weight: 650;
+}
+QPushButton#quitButton {
+    color: #e7c4b8;
+}
+"""
+
+
+def _section_rule() -> QWidget:
+    line = QWidget()
+    line.setObjectName("sectionRule")
+    line.setFixedHeight(1)
+    return line
+
+
+def _pill_button(text: str, icon: QIcon | None = None) -> QPushButton:
+    button = QPushButton(text)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    if icon is not None:
+        button.setIcon(icon)
+        button.setIconSize(QSize(14, 14))
+    return button
+
+
+def _refresh_icon() -> QIcon:
+    return _stroke_icon(_paint_refresh)
+
+
+def _quit_icon() -> QIcon:
+    return _stroke_icon(_paint_quit)
+
+
+def _stroke_icon(paint) -> QIcon:
+    pixmap = QPixmap(16, 16)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("#d1d5db"))
+    pen.setWidthF(1.4)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    paint(painter)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _paint_refresh(painter: QPainter) -> None:
+    painter.drawArc(QRectF(2.5, 2.5, 11, 11), 40 * 16, 280 * 16)
+    painter.drawLine(11, 3, 13, 5)
+    painter.drawLine(13, 5, 10, 6)
+
+
+def _paint_quit(painter: QPainter) -> None:
+    painter.setPen(QPen(QColor("#e7c4b8"), 1.4))
+    painter.drawRoundedRect(QRectF(3, 2.5, 7, 11), 1.2, 1.2)
+    painter.drawLine(10, 8, 14, 8)
+    painter.drawLine(12, 6, 14, 8)
+    painter.drawLine(12, 10, 14, 8)
+
+
+def _people_icon_pixmap() -> QPixmap:
+    pixmap = QPixmap(16, 16)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor("#7dcea0"))
+    painter.drawEllipse(QRectF(1, 2, 5, 5))
+    painter.drawEllipse(QRectF(8, 3, 4, 4))
+    painter.drawRoundedRect(QRectF(0, 8, 8, 6), 3, 3)
+    painter.drawRoundedRect(QRectF(7, 8.5, 7, 5.5), 2.5, 2.5)
+    painter.end()
+    return pixmap

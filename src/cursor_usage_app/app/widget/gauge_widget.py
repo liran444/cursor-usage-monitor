@@ -1,4 +1,4 @@
-"""Donut gauge widgets."""
+"""Donut gauges matching the design preview: thick flat-ended arcs, labels inside."""
 
 from __future__ import annotations
 
@@ -7,11 +7,14 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
 from cursor_usage_app.app.widget import colors
-from cursor_usage_app.app.widget.gauge_segments import PlanArcSegments, compute_plan_arc_segments
+from cursor_usage_app.app.widget.gauge_segments import compute_plan_arc_segments
+
+_RING_WIDTH = 11.0
+_GAUGE_SIZE = 74
 
 
 class DonutGauge(QWidget):
-    """Single-color ring gauge with centered percent and optional tag."""
+    """Single-color ring. Tag sits above the percent, both inside the hole."""
 
     def __init__(
         self,
@@ -23,7 +26,7 @@ class DonutGauge(QWidget):
         self._tag = tag
         self._arc_color = arc_color
         self._percent: float | None = None
-        self.setMinimumSize(72, 72)
+        self.setFixedSize(_GAUGE_SIZE, _GAUGE_SIZE)
 
     def set_percent(self, value: float | None) -> None:
         self._percent = value
@@ -32,51 +35,22 @@ class DonutGauge(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        side = min(self.width(), self.height())
-        margin = 4.0
-        rect = QRectF(margin, margin, side - 2 * margin, side - 2 * margin)
-
-        pen_track = QPen(colors.TRACK, 6.0)
-        pen_track.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen_track)
-        painter.drawArc(rect, 0, 360 * 16)
-
-        span = 0.0
-        if self._percent is not None:
-            span = min(100.0, max(0.0, self._percent))
-
+        rect = _ring_rect(self.width(), self.height(), _RING_WIDTH)
+        _draw_track(painter, rect, _RING_WIDTH)
+        span = 0.0 if self._percent is None else min(100.0, max(0.0, self._percent))
         if span > 0.0:
-            pen_arc = QPen(self._arc_color, 6.0)
-            pen_arc.setCapStyle(Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen_arc)
-            start_angle = 90 * 16
-            sweep = -int(span * 360 / 100 * 16)
-            painter.drawArc(rect, start_angle, sweep)
-
-        painter.setPen(colors.TEXT_PRIMARY)
-        font = QFont(self.font())
-        font.setPointSize(9)
-        font.setBold(True)
-        painter.setFont(font)
+            _draw_arc(painter, rect, 90.0, span, self._arc_color, _RING_WIDTH)
         label = "—" if self._percent is None else f"{round(self._percent)}%"
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
-
-        tag_font = QFont(self.font())
-        tag_font.setPointSize(7)
-        painter.setFont(tag_font)
-        painter.setPen(colors.TEXT_MUTED)
-        tag_rect = QRectF(rect.left(), rect.bottom() - 2, rect.width(), 14)
-        painter.drawText(tag_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, self._tag)
+        _draw_center_stack(painter, self.rect(), self._tag, label)
 
 
 class SegmentedTotalGauge(QWidget):
-    """TOTAL ring with API (cyan) + AUTO (violet) segments."""
+    """TOTAL ring. API segment is cyan; the rest of the total arc is violet."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._segments = compute_plan_arc_segments(None, None, None)
-        self.setMinimumSize(88, 88)
+        self.setFixedSize(_GAUGE_SIZE, _GAUGE_SIZE)
 
     def set_plan_percents(
         self,
@@ -90,69 +64,104 @@ class SegmentedTotalGauge(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        side = min(self.width(), self.height())
-        margin = 4.0
-        rect = QRectF(margin, margin, side - 2 * margin, side - 2 * margin)
-
-        pen_track = QPen(colors.TRACK, 7.0)
-        pen_track.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen_track)
-        painter.drawArc(rect, 0, 360 * 16)
-
+        rect = _ring_rect(self.width(), self.height(), _RING_WIDTH)
+        _draw_track(painter, rect, _RING_WIDTH)
         segments = self._segments
         if segments.total_span <= 0.0:
-            self._draw_center_label(painter, rect, "—")
+            _draw_center_stack(painter, self.rect(), "TOTAL", "—")
             return
 
         start_deg = 90.0
-        if segments.degraded_single_color:
-            self._draw_arc_span(painter, rect, start_deg, segments.total_span, colors.CYAN)
+        if segments.degraded_single_color or segments.auto_span <= 0.0:
+            _draw_arc(painter, rect, start_deg, segments.total_span, colors.CYAN, _RING_WIDTH)
+        elif segments.api_span <= 0.0:
+            _draw_arc(painter, rect, start_deg, segments.total_span, colors.VIOLET, _RING_WIDTH)
         else:
-            if segments.api_span > 0.0:
-                self._draw_arc_span(painter, rect, start_deg, segments.api_span, colors.CYAN)
-            if segments.auto_span > 0.0:
-                auto_start = start_deg - (segments.api_span * 360.0 / 100.0)
-                self._draw_arc_span(painter, rect, auto_start, segments.auto_span, colors.VIOLET)
+            _draw_arc(painter, rect, start_deg, segments.api_span, colors.CYAN, _RING_WIDTH)
+            auto_start = start_deg - (segments.api_span * 360.0 / 100.0)
+            _draw_arc(painter, rect, auto_start, segments.auto_span, colors.VIOLET, _RING_WIDTH)
 
-        display = f"{round(segments.total_span)}%"
-        self._draw_center_label(painter, rect, display)
-
-        tag_font = QFont(self.font())
-        tag_font.setPointSize(7)
-        painter.setFont(tag_font)
-        painter.setPen(colors.TEXT_MUTED)
-        tag_rect = QRectF(rect.left(), rect.bottom() - 2, rect.width(), 14)
-        painter.drawText(tag_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, "TOTAL")
-
-    def _draw_arc_span(
-        self,
-        painter: QPainter,
-        rect: QRectF,
-        start_deg: float,
-        span_percent: float,
-        color: QColor,
-    ) -> None:
-        pen = QPen(color, 7.0)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
-        start_angle = int(start_deg * 16)
-        sweep = -int(span_percent * 360 / 100 * 16)
-        painter.drawArc(rect, start_angle, sweep)
-
-    def _draw_center_label(self, painter: QPainter, rect: QRectF, text: str) -> None:
-        painter.setPen(colors.TEXT_PRIMARY)
-        font = QFont(self.font())
-        font.setPointSize(10)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+        _draw_center_stack(painter, self.rect(), "TOTAL", f"{round(segments.total_span)}%")
 
 
-class MiniTotalGauge(SegmentedTotalGauge):
-    """Compact-mode mini ring."""
+class MiniTotalGauge(QWidget):
+    """Compact-mode mini ring (arc only; the percent is shown beside it)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumSize(48, 48)
-        self.setMaximumSize(56, 56)
+        self._segments = compute_plan_arc_segments(None, None, None)
+        self.setFixedSize(22, 22)
+
+    def set_plan_percents(
+        self,
+        total: float | None,
+        api: float | None,
+        auto: float | None,
+    ) -> None:
+        self._segments = compute_plan_arc_segments(total, api, auto)
+        self.update()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        width = 4.0
+        rect = _ring_rect(self.width(), self.height(), width)
+        _draw_track(painter, rect, width)
+        segments = self._segments
+        if segments.total_span <= 0.0:
+            return
+        color = colors.VIOLET if (not segments.degraded_single_color and segments.api_span <= 0.0) else colors.CYAN
+        _draw_arc(painter, rect, 90.0, segments.total_span, color, width)
+
+
+def _ring_rect(width: int, height: int, stroke: float) -> QRectF:
+    side = float(min(width, height))
+    inset = stroke / 2.0 + 1.0
+    return QRectF(inset, inset, side - 2 * inset, side - 2 * inset)
+
+
+def _draw_track(painter: QPainter, rect: QRectF, stroke: float) -> None:
+    pen = QPen(colors.TRACK, stroke)
+    pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawEllipse(rect)
+
+
+def _draw_arc(
+    painter: QPainter,
+    rect: QRectF,
+    start_deg: float,
+    span_percent: float,
+    color: QColor,
+    stroke: float,
+) -> None:
+    pen = QPen(color, stroke)
+    pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    start_angle = int(round(start_deg * 16))
+    sweep = -int(round(span_percent * 360.0 / 100.0 * 16))
+    if sweep == 0 and span_percent > 0.0:
+        sweep = -8
+    painter.drawArc(rect, start_angle, sweep)
+
+
+def _draw_center_stack(painter: QPainter, bounds, tag: str, value: str) -> None:
+    rect = QRectF(bounds)
+    tag_font = QFont("Segoe UI")
+    tag_font.setPixelSize(8)
+    tag_font.setWeight(QFont.Weight.DemiBold)
+    tag_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
+    painter.setFont(tag_font)
+    painter.setPen(QColor("#c6c6c8"))
+    tag_rect = QRectF(rect.left(), rect.center().y() - 16, rect.width(), 12)
+    painter.drawText(tag_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, tag)
+
+    value_font = QFont("Segoe UI")
+    value_font.setPixelSize(15)
+    value_font.setWeight(QFont.Weight.Bold)
+    painter.setFont(value_font)
+    painter.setPen(colors.TEXT_PRIMARY)
+    value_rect = QRectF(rect.left(), rect.center().y() - 2, rect.width(), 18)
+    painter.drawText(value_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, value)

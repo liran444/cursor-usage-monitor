@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
 from cursor_usage_app.app.single_instance import SingleInstanceGuard
@@ -16,6 +17,7 @@ def run_tray(argv: list[str] | None = None) -> int:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("Cursor Usage")
+    app.setFont(QFont("Segoe UI", 9))
 
     controller_holder: list[TrayController] = []
 

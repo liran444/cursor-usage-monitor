@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
 from cursor_usage_app.app.widget.usage_window import UsageWindow
@@ -22,6 +23,7 @@ def run_widget(argv: list[str] | None = None) -> int:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(True)
     app.setApplicationName("Cursor Usage")
+    app.setFont(QFont("Segoe UI", 9))
 
     window = UsageWindow()
     widget = window.widget()
