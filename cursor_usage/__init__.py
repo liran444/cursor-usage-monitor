@@ -1,1 +1,0 @@
-"""Cursor usage monitor package."""
