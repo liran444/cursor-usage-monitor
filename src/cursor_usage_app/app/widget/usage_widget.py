@@ -320,7 +320,7 @@ class UsageWidget(QWidget):
         gauge_outer.addWidget(gauge_title)
 
         gauge_row = QHBoxLayout()
-        gauge_row.setSpacing(4)
+        gauge_row.setSpacing(10)
         self._total_gauge = SegmentedTotalGauge()
         self._api_gauge = DonutGauge("API", colors.CYAN)
         self._auto_gauge = DonutGauge("AUTO", colors.VIOLET)
