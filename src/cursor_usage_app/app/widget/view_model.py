@@ -75,7 +75,7 @@ def view_model_loading(previous: WidgetViewModel | None = None) -> WidgetViewMod
         error_code=None,
         error_message=None,
         fetched_at=previous.fetched_at if previous is not None else None,
-        inline_message="Refreshing…",
+        inline_message=None,
     )
 
 

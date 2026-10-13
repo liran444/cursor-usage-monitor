@@ -6,9 +6,10 @@ import webbrowser
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -85,8 +86,15 @@ class UsageWidget(QWidget):
         self._spinner_timer = QTimer(self)
         self._spinner_timer.setInterval(120)
         self._spinner_timer.timeout.connect(self._advance_login_spinner)
+        self._refresh_busy = False
+        self._content_busy = False
+        self._busy_index = 0
+        self._busy_timer = QTimer(self)
+        self._busy_timer.setInterval(70)
+        self._busy_timer.timeout.connect(self._advance_busy_spinner)
         self._login_imported.connect(self._on_import_success)
         self._login_import_failed.connect(self._on_import_error)
+        self._refresh_metrics_locked = False
 
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -138,6 +146,8 @@ class UsageWidget(QWidget):
         self.apply_envelope(envelope)
 
     def refresh(self) -> None:
+        if self._view_model.phase == "loading":
+            return
         self._view_model = view_model_loading(self._view_model)
         self._render_view_model()
         self._fetch_thread = start_fetch_in_thread(
@@ -181,6 +191,21 @@ class UsageWidget(QWidget):
         self._inline_error.setWordWrap(True)
         self._inline_error.hide()
         root.addWidget(self._inline_error)
+
+        self._loading_card = QFrame()
+        self._loading_card.setObjectName("insetCard")
+        loading_layout = QVBoxLayout(self._loading_card)
+        loading_layout.setContentsMargins(12, 28, 12, 28)
+        loading_layout.setSpacing(10)
+        self._loading_icon = QLabel()
+        self._loading_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_layout.addWidget(self._loading_icon)
+        loading_caption = QLabel("Loading usage")
+        loading_caption.setObjectName("mutedLabel")
+        loading_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_layout.addWidget(loading_caption)
+        self._loading_card.hide()
+        root.addWidget(self._loading_card)
 
         self._login_card = QFrame()
         self._login_card.setObjectName("insetCard")
@@ -398,7 +423,11 @@ class UsageWidget(QWidget):
         self._btn_toggle = _pill_button("Collapse", material_icon("expand_less", colors.AMBER))
         self._btn_toggle.setObjectName("toggleButton")
         self._btn_toggle.setToolTip("Show less detail")
-        self._btn_refresh = _pill_button("Refresh", material_icon("refresh", "#d1d5db"))
+        self._refresh_frames = _rotated_icons(material_icon("refresh", "#d1d5db"), 18)
+        self._btn_refresh = _pill_button("Refresh", self._refresh_frames[0])
+        self._btn_refresh.setIconSize(QSize(18, 18))
+        self._content_frames = _rotated_icons(material_icon("progress_activity", colors.CYAN), 28)
+        self._loading_icon.setPixmap(self._content_frames[0].pixmap(28, 28))
         self._btn_dashboard = _pill_button(
             "Dashboard",
             material_icon("open_in_new", "#d1d5db"),
@@ -475,6 +504,7 @@ class UsageWidget(QWidget):
     def _render_view_model(self) -> None:
         vm = self._view_model
         self._show_inline_message(vm.inline_message)
+        self._sync_busy_spinner()
 
         snapshot = vm.snapshot
         if snapshot is not None:
@@ -493,12 +523,47 @@ class UsageWidget(QWidget):
         self._meta_reset.setText(f"Next Reset:    {reset}")
 
     def _show_inline_message(self, message: str | None) -> None:
-        if self._needs_browser_login() or message is None or message == "":
+        if self._view_model.phase == "loading" or self._needs_browser_login() or message is None or message == "":
             self._inline_error.hide()
             self._inline_error.setText("")
             return
         self._inline_error.setText(message)
         self._inline_error.show()
+
+    def _empty_loading(self) -> bool:
+        return (
+            self._view_model.phase == "loading"
+            and self._view_model.snapshot is None
+            and not self._needs_browser_login()
+        )
+
+    def _sync_busy_spinner(self) -> None:
+        loading = self._view_model.phase == "loading"
+        self._refresh_busy = loading
+        self._content_busy = self._empty_loading()
+        self._set_data_dimmed(loading and self._view_model.snapshot is not None)
+        if self._refresh_busy or self._content_busy:
+            if not self._busy_timer.isActive():
+                self._busy_index = 0
+                self._busy_timer.start()
+            self._paint_busy_frame()
+            return
+        self._busy_timer.stop()
+        if self._refresh_frames:
+            self._btn_refresh.setIcon(self._refresh_frames[0])
+            self._btn_refresh.setIconSize(QSize(18, 18))
+
+    def _advance_busy_spinner(self) -> None:
+        self._busy_index = (self._busy_index + 1) % len(self._refresh_frames)
+        self._paint_busy_frame()
+
+    def _paint_busy_frame(self) -> None:
+        if self._refresh_busy:
+            self._btn_refresh.setIcon(self._refresh_frames[self._busy_index])
+            self._btn_refresh.setIconSize(QSize(18, 18))
+        if self._content_busy:
+            frame = self._content_frames[self._busy_index % len(self._content_frames)]
+            self._loading_icon.setPixmap(frame.pixmap(28, 28))
 
     def _fill_snapshot(self, snapshot: UsageSnapshot) -> None:
         personal_pct = format_pool_percent(snapshot.personal.used_usd, snapshot.personal.limit_usd)
@@ -577,16 +642,19 @@ class UsageWidget(QWidget):
     def _apply_section_visibility(self) -> None:
         login = self._needs_browser_login()
         compact = self._compact
+        empty_loading = self._empty_loading()
+        show_data = not login and not empty_loading
+        self._loading_card.setVisible(empty_loading)
         self._login_card.setVisible(login)
-        self._personal_card.setVisible(not login)
-        self._compact_total_row.setVisible(compact and not login)
-        self._team_block.setVisible(not login and not compact and self._view_model.show_team_row)
-        self._gauge_block.setVisible(not login and not compact)
+        self._personal_card.setVisible(show_data)
+        self._compact_total_row.setVisible(compact and show_data)
+        self._team_block.setVisible(show_data and not compact and self._view_model.show_team_row)
+        self._gauge_block.setVisible(show_data and not compact)
         self._on_demand_card.setVisible(
-            not login and not compact and self._view_model.show_on_demand_card
+            show_data and not compact and self._view_model.show_on_demand_card
         )
-        self._summary_block.setVisible(not login and not compact)
-        self._metadata_block.setVisible(not login and not compact)
+        self._summary_block.setVisible(show_data and not compact)
+        self._metadata_block.setVisible(show_data and not compact)
         self._action_row.setVisible(not login)
         self._btn_token.setVisible(login)
         self._btn_dashboard.setVisible(not login and not compact)
@@ -594,7 +662,7 @@ class UsageWidget(QWidget):
 
     def _sync_section_rules(self) -> None:
         """One hairline between each visible section; hidden sections take their rule with them."""
-        if self._needs_browser_login():
+        if self._needs_browser_login() or self._empty_loading():
             self._rule_before_team.setVisible(False)
             self._rule_before_gauges.setVisible(False)
             self._rule_before_on_demand.setVisible(False)
@@ -603,9 +671,9 @@ class UsageWidget(QWidget):
             self._rule_before_metadata.setVisible(False)
             return
         compact = self._compact
-        self._rule_before_team.setVisible(self._team_block.isVisible())
+        self._rule_before_team.setVisible(not self._team_block.isHidden())
         self._rule_before_gauges.setVisible(not compact)
-        self._rule_before_on_demand.setVisible(self._on_demand_card.isVisible())
+        self._rule_before_on_demand.setVisible(not self._on_demand_card.isHidden())
         self._rule_before_summary.setVisible(not compact)
         self._rule_before_actions.setVisible(True)
         self._rule_before_metadata.setVisible(not compact)
@@ -739,12 +807,49 @@ class UsageWidget(QWidget):
             self._btn_toggle.setText("Collapse")
             self._btn_toggle.setToolTip("Show less detail")
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if self._refresh_metrics_locked:
+            return
+        self._refresh_metrics_locked = True
+        QTimer.singleShot(0, self._lock_refresh_button_metrics)
+
+    def _lock_refresh_button_metrics(self) -> None:
+        """Keep the on-screen Refresh size. Later icon frames must not relayout it."""
+        self._btn_refresh.setFixedHeight(self._btn_toggle.height())
+        self._btn_refresh.setMinimumWidth(self._btn_refresh.width())
+        self._resize_to_mode()
+
     def _resize_to_mode(self) -> None:
         self.setFixedHeight(self.preferred_height())
         window = self.window()
         if window is not None and hasattr(window, "resize_for_content"):
             if getattr(window, "_card", None) is not None:
                 window.resize_for_content()
+
+    def _set_data_dimmed(self, dimmed: bool) -> None:
+        for widget in (
+            self._personal_card,
+            self._rule_before_team,
+            self._compact_total_row,
+            self._team_block,
+            self._rule_before_gauges,
+            self._gauge_block,
+            self._rule_before_on_demand,
+            self._on_demand_card,
+            self._rule_before_summary,
+            self._summary_block,
+            self._rule_before_metadata,
+            self._metadata_block,
+        ):
+            if not dimmed:
+                widget.setGraphicsEffect(None)
+                continue
+            effect = widget.graphicsEffect()
+            if not isinstance(effect, QGraphicsOpacityEffect):
+                effect = QGraphicsOpacityEffect(widget)
+                effect.setOpacity(0.35)
+                widget.setGraphicsEffect(effect)
 
 
 _ROOT_STYLESHEET = """
@@ -916,6 +1021,27 @@ def _section_rule() -> QWidget:
     line.setObjectName("sectionRule")
     line.setFixedHeight(1)
     return line
+
+
+def _rotated_icons(icon: QIcon, size: int, steps: int = 12) -> list[QIcon]:
+    base = icon.pixmap(size, size)
+    dpr = base.devicePixelRatio() or 1.0
+    physical = max(1, int(round(size * dpr)))
+    frames: list[QIcon] = []
+    for step in range(steps):
+        canvas = QPixmap(physical, physical)
+        canvas.setDevicePixelRatio(dpr)
+        canvas.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.translate(size / 2, size / 2)
+        painter.rotate(step * (360 / steps))
+        painter.translate(-size / 2, -size / 2)
+        painter.drawPixmap(0, 0, base)
+        painter.end()
+        frames.append(QIcon(canvas))
+    return frames
 
 
 def _pill_button(text: str, icon: QIcon | None = None) -> QPushButton:

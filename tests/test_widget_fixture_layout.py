@@ -4,7 +4,10 @@ import os
 
 import pytest
 
+from PySide6.QtWidgets import QGraphicsOpacityEffect
+
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
+from cursor_usage_app.app.widget.view_model import view_model_loading
 from cursor_usage_app.cache.usage_cache import CacheEnvelopeOk, utc_now_iso
 from cursor_usage_app.domain.mapper import UsageSummaryMapper
 from fixture_loader import FIXTURES_DIR, load_fixture
@@ -77,3 +80,36 @@ def test_widget_invalid_token_fixture_shows_auth_message(qapp) -> None:
     assert widget._btn_token.isHidden() is False
     assert widget._btn_quit.isHidden() is False
     assert widget._token_panel.isHidden() is True
+
+
+def test_refresh_with_snapshot_spins_button_without_banner(qapp) -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    widget = UsageWidget()
+    widget.apply_fixture_envelope_dict(_cache_dict_from_api_fixture("usage_summary_team_pool.json"))
+    widget._view_model = view_model_loading(widget._view_model)
+    widget._render_view_model()
+    assert widget._inline_error.isHidden() is True
+    assert widget._loading_card.isHidden() is True
+    assert widget._personal_card.isHidden() is False
+    assert isinstance(widget._personal_card.graphicsEffect(), QGraphicsOpacityEffect)
+    assert widget._btn_refresh.isEnabled() is True
+    assert widget._busy_timer.isActive() is True
+    widget.apply_fixture_envelope_dict(_cache_dict_from_api_fixture("usage_summary_team_pool.json"))
+    assert widget._btn_refresh.isEnabled() is True
+    assert widget._personal_card.graphicsEffect() is None
+    assert widget._busy_timer.isActive() is False
+
+
+def test_loading_without_snapshot_shows_content_loader(qapp) -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    widget = UsageWidget()
+    widget._view_model = view_model_loading(None)
+    widget._render_view_model()
+    assert widget._loading_card.isHidden() is False
+    assert widget._personal_card.isHidden() is True
+    assert widget._inline_error.isHidden() is True
+    assert widget._personal_card.graphicsEffect() is None
+    assert widget._btn_refresh.isEnabled() is True
+    widget.apply_fixture_envelope_dict(_cache_dict_from_api_fixture("usage_summary_personal_only.json"))
+    assert widget._loading_card.isHidden() is True
+    assert widget._busy_timer.isActive() is False
