@@ -5,8 +5,8 @@ from __future__ import annotations
 import webbrowser
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -26,6 +26,7 @@ from cursor_usage_app.app.widget.formatting import (
     format_usd,
 )
 from cursor_usage_app.app.widget.gauge_widget import DonutGauge, MiniTotalGauge, SegmentedTotalGauge
+from cursor_usage_app.app.widget.material_icons import material_icon, material_pixmap
 from cursor_usage_app.app.widget.progress_bar import HorizontalBar
 from cursor_usage_app.app.widget.view_model import (
     WidgetViewModel,
@@ -56,7 +57,6 @@ _SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
 class UsageWidget(QWidget):
     """Usage monitor card; supports full and compact layouts."""
 
-    quit_requested = Signal()
     hide_requested = Signal()
     compact_changed = Signal(bool)
     _login_imported = Signal(str)
@@ -157,8 +157,20 @@ class UsageWidget(QWidget):
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
+        root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(8)
+
+        self._btn_quit = _icon_tool_button(
+            material_icon("close", "#e7c4b8"),
+            "Hide",
+            object_name="windowCloseButton",
+        )
+        chrome_row = QHBoxLayout()
+        chrome_row.setContentsMargins(0, 0, 0, 0)
+        chrome_row.setSpacing(2)
+        chrome_row.addStretch()
+        chrome_row.addWidget(self._btn_quit)
+        root.addLayout(chrome_row)
 
         self._inline_error = QLabel()
         self._inline_error.setObjectName("inlineError")
@@ -253,7 +265,7 @@ class UsageWidget(QWidget):
         team_row = QHBoxLayout()
         team_row.setSpacing(6)
         self._team_icon = QLabel()
-        self._team_icon.setPixmap(_people_icon_pixmap())
+        self._team_icon.setPixmap(material_pixmap("group", colors.GREEN, size=16))
         self._team_icon.setFixedSize(16, 16)
         self._team_amount = QLabel()
         self._team_amount.setObjectName("amountLabel")
@@ -376,26 +388,26 @@ class UsageWidget(QWidget):
         self._btn_token_cancel.clicked.connect(self._hide_token_editor)
         root.addWidget(self._token_panel)
 
-        self._btn_refresh = _pill_button("Refresh", _refresh_icon())
         self._btn_token = _pill_button("Set token...")
-        self._btn_toggle = _pill_button("Collapse")
+        root.addWidget(self._btn_token)
+
+        self._btn_toggle = _pill_button("Collapse", material_icon("expand_less", colors.AMBER))
         self._btn_toggle.setObjectName("toggleButton")
-        self._btn_dashboard = _pill_button("Open dashboard")
-        self._btn_quit = _pill_button("Quit", _quit_icon())
-        self._btn_quit.setObjectName("quitButton")
+        self._btn_toggle.setToolTip("Show less detail")
+        self._btn_refresh = _pill_button("Refresh", material_icon("refresh", "#d1d5db"))
+        self._btn_dashboard = _pill_button(
+            "Dashboard",
+            material_icon("open_in_new", "#d1d5db"),
+        )
 
-        btn_row_top = QHBoxLayout()
-        btn_row_top.setSpacing(6)
-        btn_row_top.addWidget(self._btn_refresh, 1)
-        btn_row_top.addWidget(self._btn_token, 1)
-        root.addLayout(btn_row_top)
-
-        btn_row_bottom = QHBoxLayout()
-        btn_row_bottom.setSpacing(6)
-        btn_row_bottom.addWidget(self._btn_toggle, 1)
-        btn_row_bottom.addWidget(self._btn_dashboard, 1)
-        btn_row_bottom.addWidget(self._btn_quit, 1)
-        root.addLayout(btn_row_bottom)
+        self._action_row = QWidget()
+        action_layout = QHBoxLayout(self._action_row)
+        action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setSpacing(6)
+        action_layout.addWidget(self._btn_toggle)
+        action_layout.addWidget(self._btn_refresh, 1)
+        action_layout.addWidget(self._btn_dashboard, 1)
+        root.addWidget(self._action_row)
 
         self._rule_before_metadata = _section_rule()
         root.addWidget(self._rule_before_metadata)
@@ -404,7 +416,7 @@ class UsageWidget(QWidget):
         self._btn_token.clicked.connect(self.show_token_editor)
         self._btn_toggle.clicked.connect(self.toggle_compact)
         self._btn_dashboard.clicked.connect(lambda: webbrowser.open(_DASHBOARD_URL))
-        self._btn_quit.clicked.connect(self.quit_requested.emit)
+        self._btn_quit.clicked.connect(self.hide_requested.emit)
 
         # Metadata
         self._metadata_block = QWidget()
@@ -571,7 +583,7 @@ class UsageWidget(QWidget):
         )
         self._summary_block.setVisible(not login and not compact)
         self._metadata_block.setVisible(not login and not compact)
-        self._btn_toggle.setVisible(not login)
+        self._action_row.setVisible(not login)
         self._btn_token.setVisible(login)
         self._btn_dashboard.setVisible(not login and not compact)
         self._sync_section_rules()
@@ -715,9 +727,13 @@ class UsageWidget(QWidget):
 
     def _update_toggle_button(self) -> None:
         if self._compact:
+            self._btn_toggle.setIcon(material_icon("expand_more", colors.AMBER))
             self._btn_toggle.setText("Expand")
+            self._btn_toggle.setToolTip("Show full details")
         else:
+            self._btn_toggle.setIcon(material_icon("expand_less", colors.AMBER))
             self._btn_toggle.setText("Collapse")
+            self._btn_toggle.setToolTip("Show less detail")
 
     def _resize_to_mode(self) -> None:
         self.setFixedHeight(self.preferred_height())
@@ -843,14 +859,28 @@ QPushButton {
 QPushButton:hover {
     background-color: #45474b;
 }
+QPushButton#windowChromeButton, QPushButton#windowCloseButton {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 2px;
+    min-width: 24px;
+    max-width: 24px;
+    min-height: 22px;
+    max-height: 22px;
+}
+QPushButton#windowChromeButton:hover {
+    background-color: #45474b;
+}
+QPushButton#windowCloseButton:hover {
+    background-color: #5c3330;
+}
 QPushButton#toggleButton {
     color: #e6d3b0;
     background-color: #6e5c42;
     border: 1px solid #8d784f;
     font-weight: 650;
-}
-QPushButton#quitButton {
-    color: #e7c4b8;
+    padding: 4px 10px;
 }
 QPushButton#loginButton {
     color: #041316;
@@ -889,58 +919,15 @@ def _pill_button(text: str, icon: QIcon | None = None) -> QPushButton:
     button.setCursor(Qt.CursorShape.PointingHandCursor)
     if icon is not None:
         button.setIcon(icon)
-        button.setIconSize(QSize(14, 14))
+        button.setIconSize(QSize(18, 18))
     return button
 
 
-def _refresh_icon() -> QIcon:
-    return _stroke_icon(_paint_refresh)
-
-
-def _quit_icon() -> QIcon:
-    return _stroke_icon(_paint_quit)
-
-
-def _stroke_icon(paint) -> QIcon:
-    pixmap = QPixmap(16, 16)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    pen = QPen(QColor("#d1d5db"))
-    pen.setWidthF(1.4)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-    painter.setPen(pen)
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    paint(painter)
-    painter.end()
-    return QIcon(pixmap)
-
-
-def _paint_refresh(painter: QPainter) -> None:
-    painter.drawArc(QRectF(2.5, 2.5, 11, 11), 40 * 16, 280 * 16)
-    painter.drawLine(11, 3, 13, 5)
-    painter.drawLine(13, 5, 10, 6)
-
-
-def _paint_quit(painter: QPainter) -> None:
-    painter.setPen(QPen(QColor("#e7c4b8"), 1.4))
-    painter.drawRoundedRect(QRectF(3, 2.5, 7, 11), 1.2, 1.2)
-    painter.drawLine(10, 8, 14, 8)
-    painter.drawLine(12, 6, 14, 8)
-    painter.drawLine(12, 10, 14, 8)
-
-
-def _people_icon_pixmap() -> QPixmap:
-    pixmap = QPixmap(16, 16)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QColor("#7dcea0"))
-    painter.drawEllipse(QRectF(1, 2, 5, 5))
-    painter.drawEllipse(QRectF(8, 3, 4, 4))
-    painter.drawRoundedRect(QRectF(0, 8, 8, 6), 3, 3)
-    painter.drawRoundedRect(QRectF(7, 8.5, 7, 5.5), 2.5, 2.5)
-    painter.end()
-    return pixmap
+def _icon_tool_button(icon: QIcon, tooltip: str, object_name: str = "iconToolButton") -> QPushButton:
+    button = QPushButton()
+    button.setObjectName(object_name)
+    button.setIcon(icon)
+    button.setIconSize(QSize(18, 18))
+    button.setToolTip(tooltip)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    return button

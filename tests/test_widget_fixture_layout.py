@@ -38,7 +38,10 @@ def test_widget_team_fixture_layout(qapp) -> None:
     widget.apply_fixture_envelope_dict(raw)
 
     assert widget._btn_token.isHidden() is True
+    assert widget._btn_toggle.text() == "Collapse"
     assert widget._btn_dashboard.isHidden() is False
+    assert widget._btn_dashboard.text() == "Dashboard"
+    assert widget._btn_quit.isHidden() is False
     assert widget.is_compact() is False
     assert widget.width() == 295
     full_height = widget.preferred_height()
@@ -48,6 +51,8 @@ def test_widget_team_fixture_layout(qapp) -> None:
     assert widget.preferred_height() < full_height
     assert widget.is_compact() is True
     assert widget._btn_dashboard.isHidden() is True
+    assert widget._btn_toggle.text() == "Expand"
+    assert widget._action_row.isHidden() is False
 
 
 def test_widget_error_envelope_does_not_crash(qapp) -> None:
@@ -67,7 +72,8 @@ def test_widget_invalid_token_fixture_shows_auth_message(qapp) -> None:
     assert widget._btn_login.text() == "Log in to Cursor"
     assert widget._personal_card.isHidden() is True
     assert widget._inline_error.isHidden() is True
-    assert widget._btn_toggle.isHidden() is True
+    assert widget._action_row.isHidden() is True
     assert widget._btn_dashboard.isHidden() is True
     assert widget._btn_token.isHidden() is False
+    assert widget._btn_quit.isHidden() is False
     assert widget._token_panel.isHidden() is True

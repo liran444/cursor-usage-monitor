@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QCursor, QGuiApplication, QKeyEvent, QMouseEvent, QPainter, QPen
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QWidget
 
 from cursor_usage_app.app.widget import colors
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
@@ -32,7 +32,6 @@ class UsageWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self._card = UsageWidget(self, cache_path=cache_path, store=store)
-        self._card.quit_requested.connect(QApplication.instance().quit)
         self._card.hide_requested.connect(self.hide)
         self._card.compact_changed.connect(lambda _c: self.resize_for_content())
 
