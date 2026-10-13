@@ -147,6 +147,10 @@ class UsageWidget(QWidget):
             on_finished=self._on_fetch_finished,
         )
 
+    def _open_dashboard(self) -> None:
+        webbrowser.open(_DASHBOARD_URL)
+        self.hide_requested.emit()
+
     def preferred_height(self) -> int:
         layout = self.layout()
         if layout is None:
@@ -415,7 +419,7 @@ class UsageWidget(QWidget):
         self._btn_refresh.clicked.connect(self.refresh)
         self._btn_token.clicked.connect(self.show_token_editor)
         self._btn_toggle.clicked.connect(self.toggle_compact)
-        self._btn_dashboard.clicked.connect(lambda: webbrowser.open(_DASHBOARD_URL))
+        self._btn_dashboard.clicked.connect(self._open_dashboard)
         self._btn_quit.clicked.connect(self.hide_requested.emit)
 
         # Metadata
