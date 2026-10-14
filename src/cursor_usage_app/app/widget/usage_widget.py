@@ -60,6 +60,8 @@ _REFRESH_DIM_OPACITY = 0.42
 _DATA_DIM_OPACITY = 0.35
 _OPACITY_FADE_MS = 300
 _SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
+_CARD_SECTION_INSET_MARGINS = (12, 10, 12, 10)
+_SECTION_INSET_MARGINS = (12, 2, 12, 2)
 
 
 class UsageWidget(QWidget):
@@ -273,7 +275,7 @@ class UsageWidget(QWidget):
         self._personal_card = QFrame()
         self._personal_card.setObjectName("insetCard")
         personal_layout = QVBoxLayout(self._personal_card)
-        personal_layout.setContentsMargins(12, 10, 12, 10)
+        personal_layout.setContentsMargins(*_CARD_SECTION_INSET_MARGINS)
         personal_layout.setSpacing(4)
 
         personal_header_row = QHBoxLayout()
@@ -308,7 +310,7 @@ class UsageWidget(QWidget):
         # Compact mini total
         self._compact_total_row = QWidget()
         compact_layout = QHBoxLayout(self._compact_total_row)
-        compact_layout.setContentsMargins(0, 4, 0, 0)
+        compact_layout.setContentsMargins(*_SECTION_INSET_MARGINS)
         total_caption = QLabel("TOTAL")
         total_caption.setObjectName("mutedLabel")
         compact_layout.addWidget(total_caption)
@@ -325,7 +327,7 @@ class UsageWidget(QWidget):
         # Team
         self._team_block = QWidget()
         team_layout = QVBoxLayout(self._team_block)
-        team_layout.setContentsMargins(4, 2, 4, 0)
+        team_layout.setContentsMargins(*_SECTION_INSET_MARGINS)
         team_layout.setSpacing(2)
         team_header_row = QHBoxLayout()
         team_header_row.setContentsMargins(0, 0, 0, 0)
@@ -359,7 +361,7 @@ class UsageWidget(QWidget):
         # Gauges
         self._gauge_block = QWidget()
         gauge_outer = QVBoxLayout(self._gauge_block)
-        gauge_outer.setContentsMargins(2, 4, 2, 4)
+        gauge_outer.setContentsMargins(*_SECTION_INSET_MARGINS)
         gauge_outer.setSpacing(10)
         gauge_header_row = QHBoxLayout()
         gauge_header_row.setContentsMargins(0, 0, 0, 0)
@@ -392,7 +394,7 @@ class UsageWidget(QWidget):
         self._on_demand_card = QFrame()
         self._on_demand_card.setObjectName("onDemandCard")
         od_layout = QVBoxLayout(self._on_demand_card)
-        od_layout.setContentsMargins(12, 10, 12, 10)
+        od_layout.setContentsMargins(*_CARD_SECTION_INSET_MARGINS)
         od_layout.setSpacing(5)
         od_header = QHBoxLayout()
         od_title = QLabel("On Demand Usage")
@@ -477,7 +479,7 @@ class UsageWidget(QWidget):
 
         self._action_row = QWidget()
         action_layout = QHBoxLayout(self._action_row)
-        action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setContentsMargins(*_SECTION_INSET_MARGINS)
         action_layout.setSpacing(6)
         action_layout.addWidget(self._btn_toggle)
         action_layout.addWidget(self._btn_refresh, 1)
@@ -497,7 +499,7 @@ class UsageWidget(QWidget):
         # Metadata
         self._metadata_block = QWidget()
         meta_layout = QVBoxLayout(self._metadata_block)
-        meta_layout.setContentsMargins(0, 8, 0, 0)
+        meta_layout.setContentsMargins(*_SECTION_INSET_MARGINS)
         meta_layout.setSpacing(2)
         meta_title = QLabel("Metadata")
         meta_title.setObjectName("sectionTitle")
