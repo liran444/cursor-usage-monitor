@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+APP="/Applications/Cursor Usage.app"
+if [[ -d "$APP" ]]; then
+  /usr/bin/xattr -cr "$APP" || true
+  /usr/bin/chmod -R a+rX "$APP" || true
+fi
+exit 0

@@ -1,0 +1,10 @@
+libsecret-1-0
+gnome-keyring
+dbus-1
+libxcb1
+libxkbcommon-x11-0
+libEGL1
+glib2
+libX11-6
+libappindicator3-1
+zenity

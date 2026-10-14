@@ -89,3 +89,15 @@ cursor-usage fetch
 ```
 
 Uses the stored token and updates `usage_cache.json` (see cache contract in the project plan). With no token, fetch writes a `not_authenticated` error envelope and exits with code 1.
+
+## Installed application (frozen builds)
+
+Commands are the same; only the executable path changes:
+
+| OS | Tray (default) | Command line |
+|----|----------------|--------------|
+| Windows | `Cursor Usage` Start Menu → `cursor-usage-tray.exe` | `"C:\Program Files\Cursor Usage\cursor-usage.exe" token test` |
+| macOS | **Cursor Usage** in Applications | `"/Applications/Cursor Usage.app/Contents/MacOS/cursor-usage" token test` (if CLI binary is bundled) |
+| Linux | Applications menu or `cursor-usage` | `cursor-usage-cli token test` when CLI symlink is present, else `~/.local/share/cursor-usage/current/cursor-usage` |
+
+See [INSTALL.md](INSTALL.md) and [platforms.md](platforms.md).

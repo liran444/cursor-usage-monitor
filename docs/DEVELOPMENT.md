@@ -1,0 +1,53 @@
+# Development
+
+## Setup
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+pytest -q
+```
+
+## Run locally
+
+```bash
+cursor-usage tray
+cursor-usage widget
+cursor-usage fetch
+cursor-usage token test
+```
+
+Tray smoke (quit after 2s):
+
+```bash
+# Windows PowerShell
+$env:CURSOR_USAGE_TRAY_SMOKE_MS=2000; cursor-usage tray
+```
+
+## Release build pipeline
+
+1. **PyInstaller one-folder** — `scripts/build/build.ps1` (Windows) or `scripts/build/build.sh` (macOS/Linux).
+2. **Platform installer** into `release/`:
+   - Windows: `scripts/install/windows/build-installer.ps1` (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
+   - Linux: `scripts/install/linux/build-installer.sh` (requires `makeself`).
+   - macOS: `scripts/install/macos/build-installer.sh`.
+
+Version is read from `pyproject.toml` (`project.version`).
+
+## Frozen smoke checklist
+
+After building `dist/cursor-usage/` or installing from `release/`:
+
+- [ ] `cursor-usage-tray` with `CURSOR_USAGE_TRAY_SMOKE_MS=2000` exits without traceback.
+- [ ] `cursor-usage --help` and `cursor-usage token test` (expect failure without token, not import errors).
+- [ ] Open widget from tray; gear icons (qt-material-icons) render.
+- [ ] Windows: taskbar shows app icon, not Python.
+
+## CI
+
+`.github/workflows/release-build.yml` builds all three installers on tag push `v*` or manual dispatch.
+
+## Qt license
+
+This app uses PySide6 (Qt). Qt is available under LGPL. See [Qt licensing](https://www.qt.io/licensing/).

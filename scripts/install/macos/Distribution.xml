@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+    <title>Cursor Usage</title>
+    <organization>com.lirandekamhi</organization>
+    <domains enable_localSystem="true"/>
+    <options customize="never" require-scripts="false" rootVolumeOnly="true"/>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <license file="../../LICENSE"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.lirandekamhi.cursor-usage.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.lirandekamhi.cursor-usage.pkg" visible="false">
+        <pkg-ref id="com.lirandekamhi.cursor-usage"/>
+    </choice>
+    <pkg-ref id="com.lirandekamhi.cursor-usage" version="0" onConclusion="none">component.pkg</pkg-ref>
+</installer-gui-script>
