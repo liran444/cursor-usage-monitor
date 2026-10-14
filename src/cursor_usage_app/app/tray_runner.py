@@ -8,12 +8,14 @@ import sys
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
+from cursor_usage_app.app.shell_branding import configure_process_for_shell
 from cursor_usage_app.app.single_instance import SingleInstanceGuard
 from cursor_usage_app.app.tray_controller import TrayController
 
 
 def run_tray(argv: list[str] | None = None) -> int:
     _ = argv
+    configure_process_for_shell()
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("Cursor Usage")

@@ -78,6 +78,7 @@ class UsageWidget(QWidget):
     """Usage monitor card; supports full and compact layouts."""
 
     hide_requested = Signal()
+    minimize_requested = Signal()
     compact_changed = Signal(bool)
     tray_settings_changed = Signal()
     _login_imported = Signal(str)
@@ -218,6 +219,11 @@ class UsageWidget(QWidget):
             "Settings",
             object_name="windowChromeButton",
         )
+        self._btn_minimize = _icon_tool_button(
+            QIcon(),
+            "Minimize",
+            object_name="windowChromeButton",
+        )
         self._btn_quit = _icon_tool_button(
             QIcon(),
             "Hide",
@@ -226,8 +232,9 @@ class UsageWidget(QWidget):
         chrome_row = QHBoxLayout()
         chrome_row.setContentsMargins(0, 0, 0, 0)
         chrome_row.setSpacing(2)
-        chrome_row.addStretch()
         chrome_row.addWidget(self._btn_settings)
+        chrome_row.addStretch()
+        chrome_row.addWidget(self._btn_minimize)
         chrome_row.addWidget(self._btn_quit)
         root.addLayout(chrome_row)
 
@@ -506,6 +513,7 @@ class UsageWidget(QWidget):
         self._btn_toggle.clicked.connect(self.toggle_compact)
         self._btn_dashboard.clicked.connect(self._open_dashboard)
         self._btn_settings.clicked.connect(self._toggle_settings_popup)
+        self._btn_minimize.clicked.connect(self.minimize_requested.emit)
         self._btn_quit.clicked.connect(self.hide_requested.emit)
 
         # Metadata
@@ -742,6 +750,7 @@ class UsageWidget(QWidget):
         palette = active_palette()
         self.setStyleSheet(root_stylesheet(palette))
         self._btn_settings.setIcon(material_icon("settings", palette.chrome_icon))
+        self._btn_minimize.setIcon(material_icon("minimize", palette.chrome_icon))
         self._btn_quit.setIcon(material_icon("close", palette.close_icon))
         self._refresh_frames = _rotated_icons("refresh", palette.action_icon, 18)
         self._content_frames = _rotated_icons("progress_activity", palette.cyan, 28)

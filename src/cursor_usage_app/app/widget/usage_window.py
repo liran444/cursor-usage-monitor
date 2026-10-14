@@ -5,14 +5,27 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QCursor, QGuiApplication, QKeyEvent, QMouseEvent, QPainter, QPen
-from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QIcon, QKeyEvent, QMouseEvent, QPainter, QPen
+from PySide6.QtWidgets import QApplication, QWidget
 
+from cursor_usage_app.app.shell_branding import icon_for_shell
+from cursor_usage_app.app.tray_ring import TrayRingDisplay, render_tray_ring_icon
 from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
 from cursor_usage_app.auth.session_store import SessionStore
 
 _WIDGET_WIDTH = 303
+_WINDOW_TITLE = "Cursor Usage"
+
+
+def apply_shell_icon(icon: QIcon, window: QWidget | None = None) -> None:
+    """Keep taskbar / Dock icon in sync with the tray ring."""
+    shell_icon = icon_for_shell(icon)
+    app = QApplication.instance()
+    if app is not None:
+        app.setWindowIcon(shell_icon)
+    if window is not None:
+        window.setWindowIcon(shell_icon)
 
 
 class UsageWindow(QWidget):
@@ -25,14 +38,21 @@ class UsageWindow(QWidget):
         super().__init__()
         self._drag_offset = None
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
+        )
+        self.setWindowTitle(_WINDOW_TITLE)
+        apply_shell_icon(
+            render_tray_ring_icon(
+                TrayRingDisplay(center_kind="empty", ring_percent=None, center_text="—"),
+            ),
+            window=self,
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self._card = UsageWidget(self, cache_path=cache_path, store=store)
         self._card.hide_requested.connect(self.hide)
+        self._card.minimize_requested.connect(self.showMinimized)
         self._card.compact_changed.connect(lambda _c: self.resize_for_content())
 
         self.resize_for_content()
