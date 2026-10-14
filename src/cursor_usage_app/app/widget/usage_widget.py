@@ -29,6 +29,7 @@ from cursor_usage_app.app.widget.gauge_widget import DonutGauge, MiniTotalGauge,
 from cursor_usage_app.app.widget.material_icons import material_icon, material_pixmap
 from cursor_usage_app.app.widget.progress_bar import HorizontalBar
 from cursor_usage_app.app.widget.opacity_fade import OpacityFader
+from cursor_usage_app.app.widget.section_notify_bell import SectionNotifyBell
 from cursor_usage_app.app.widget.tray_settings_popup import TraySettingsPopup
 from cursor_usage_app.app.widget.view_model import (
     WidgetViewModel,
@@ -45,7 +46,7 @@ from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.auth.token_normalize import TokenNormalizeError
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, parse_cache_envelope
 from cursor_usage_app.domain.models import UsageSnapshot
-from cursor_usage_app.settings.app_settings import AppSettings, load_app_settings, save_app_settings
+from cursor_usage_app.settings.app_settings import load_app_settings, save_app_settings
 
 _WIDGET_WIDTH = 295
 _FULL_HEIGHT = 620
@@ -110,6 +111,7 @@ class UsageWidget(QWidget):
         self._refresh_cooldown_timer.setSingleShot(True)
         self._refresh_cooldown_timer.timeout.connect(self._end_manual_refresh_cooldown)
         self._opacity_fader = OpacityFader(_OPACITY_FADE_MS)
+        self._notify_bells_by_section: dict[str, list[SectionNotifyBell]] = {}
 
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -274,9 +276,16 @@ class UsageWidget(QWidget):
         personal_layout.setContentsMargins(12, 10, 12, 10)
         personal_layout.setSpacing(4)
 
+        personal_header_row = QHBoxLayout()
+        personal_header_row.setContentsMargins(0, 0, 0, 0)
+        personal_header_row.setSpacing(4)
         self._personal_header = QLabel("Personal")
         self._personal_header.setObjectName("sectionLabel")
-        personal_layout.addWidget(self._personal_header)
+        personal_header_row.addWidget(self._personal_header)
+        personal_header_row.addStretch()
+        self._bell_personal = self._make_notify_bell("personal")
+        personal_header_row.addWidget(self._bell_personal)
+        personal_layout.addLayout(personal_header_row)
 
         personal_row = QHBoxLayout()
         personal_row.setSpacing(8)
@@ -306,6 +315,8 @@ class UsageWidget(QWidget):
         self._mini_total = MiniTotalGauge()
         compact_layout.addWidget(self._mini_total)
         compact_layout.addStretch()
+        self._bell_plan_total_compact = self._make_notify_bell("plan_total")
+        compact_layout.addWidget(self._bell_plan_total_compact)
         self._compact_total_pct = QLabel()
         self._compact_total_pct.setObjectName("amountLabel")
         compact_layout.addWidget(self._compact_total_pct)
@@ -316,9 +327,16 @@ class UsageWidget(QWidget):
         team_layout = QVBoxLayout(self._team_block)
         team_layout.setContentsMargins(4, 2, 4, 0)
         team_layout.setSpacing(2)
+        team_header_row = QHBoxLayout()
+        team_header_row.setContentsMargins(0, 0, 0, 0)
+        team_header_row.setSpacing(4)
         self._team_header = QLabel("Team")
         self._team_header.setObjectName("teamLabel")
-        team_layout.addWidget(self._team_header)
+        team_header_row.addWidget(self._team_header)
+        team_header_row.addStretch()
+        self._bell_team = self._make_notify_bell("team")
+        team_header_row.addWidget(self._bell_team)
+        team_layout.addLayout(team_header_row)
         team_row = QHBoxLayout()
         team_row.setSpacing(6)
         self._team_icon = QLabel()
@@ -343,9 +361,16 @@ class UsageWidget(QWidget):
         gauge_outer = QVBoxLayout(self._gauge_block)
         gauge_outer.setContentsMargins(2, 4, 2, 4)
         gauge_outer.setSpacing(10)
+        gauge_header_row = QHBoxLayout()
+        gauge_header_row.setContentsMargins(0, 0, 0, 0)
+        gauge_header_row.setSpacing(4)
         gauge_title = QLabel("Dashboard API Breakdown")
         gauge_title.setObjectName("sectionTitle")
-        gauge_outer.addWidget(gauge_title)
+        gauge_header_row.addWidget(gauge_title)
+        gauge_header_row.addStretch()
+        self._bell_plan_total = self._make_notify_bell("plan_total")
+        gauge_header_row.addWidget(self._bell_plan_total)
+        gauge_outer.addLayout(gauge_header_row)
 
         gauge_row = QHBoxLayout()
         gauge_row.setSpacing(10)
@@ -376,6 +401,8 @@ class UsageWidget(QWidget):
         self._od_pct.setObjectName("coralPercent")
         od_header.addWidget(od_title)
         od_header.addStretch()
+        self._bell_on_demand = self._make_notify_bell("on_demand")
+        od_header.addWidget(self._bell_on_demand)
         od_header.addWidget(self._od_pct)
         od_layout.addLayout(od_header)
         self._od_subcopy = QLabel()
@@ -485,7 +512,25 @@ class UsageWidget(QWidget):
         root.addWidget(self._metadata_block)
 
         self._apply_compact_visibility()
+        self._sync_notify_bells_from_settings()
         self._resize_to_mode()
+
+    def _make_notify_bell(self, section_id: str) -> SectionNotifyBell:
+        bell = SectionNotifyBell(section_id, self)
+        bell.toggled_enabled.connect(self._on_notify_bell_toggled)
+        self._notify_bells_by_section.setdefault(section_id, []).append(bell)
+        return bell
+
+    def _sync_notify_bells_from_settings(self) -> None:
+        for section_id, bells in self._notify_bells_by_section.items():
+            enabled = self._app_settings.is_usage_notification_enabled(section_id)
+            for bell in bells:
+                bell.set_notification_enabled(enabled)
+
+    def _on_notify_bell_toggled(self, section_id: str, enabled: bool) -> None:
+        self._app_settings = self._app_settings.with_usage_notification(section_id, enabled)
+        save_app_settings(self._app_settings)
+        self._sync_notify_bells_from_settings()
 
     def _on_fetch_finished(self, _exit_code: int) -> None:
         self.reload_from_cache()
@@ -598,7 +643,7 @@ class UsageWidget(QWidget):
         mode = "personal" if button is self._radio_personal else "total_percent"
         if self._app_settings.tray_display_mode == mode:
             return
-        self._app_settings = AppSettings(tray_display_mode=mode)
+        self._app_settings = self._app_settings.with_tray_display_mode(mode)
         save_app_settings(self._app_settings)
         self.tray_settings_changed.emit()
 
@@ -924,6 +969,7 @@ class UsageWidget(QWidget):
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self._app_settings = load_app_settings()
+        self._sync_notify_bells_from_settings()
         if self._settings_popup is not None:
             self._sync_tray_display_radios()
         if self._refresh_metrics_locked:
@@ -1089,7 +1135,8 @@ QPushButton#refreshButton:disabled[refreshState="cooldown"] {
     background-color: #2e3032;
     border-color: #3a3c3e;
 }
-QPushButton#windowChromeButton, QPushButton#windowCloseButton {
+QPushButton#windowChromeButton, QPushButton#windowCloseButton,
+QPushButton#sectionNotifyBell {
     background: transparent;
     border: none;
     border-radius: 6px;
@@ -1098,6 +1145,9 @@ QPushButton#windowChromeButton, QPushButton#windowCloseButton {
     max-width: 24px;
     min-height: 22px;
     max-height: 22px;
+}
+QPushButton#sectionNotifyBell:hover {
+    background-color: #45474b;
 }
 QPushButton#windowChromeButton:hover {
     background-color: #45474b;

@@ -18,6 +18,7 @@ from cursor_usage_app.app.widget.usage_window import UsageWindow
 from cursor_usage_app.auth.browser_import import BrowserImportError, import_session_token_from_browsers
 from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.cache.usage_cache import default_cache_path
+from cursor_usage_app.app.usage_notifier import UsageNotifier
 from cursor_usage_app.settings.app_settings import load_app_settings
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class TrayController(QObject):
         self._store = store or SessionStore()
         self._cache_path = cache_path or default_cache_path()
         self._settings = load_app_settings()
+        self._usage_notifier = UsageNotifier()
         self._window = UsageWindow(
             cache_path=self._cache_path,
             store=self._store,
@@ -199,6 +201,15 @@ class TrayController(QObject):
         display = tray_ring_display_from_envelope(envelope, mode=mode)
         self._tray.setIcon(render_tray_ring_icon(display))
         self._tray.setToolTip(build_tray_tooltip(envelope, mode=mode))
+        self._usage_notifier.process_envelope(envelope, self._show_usage_notification)
+
+    def _show_usage_notification(self, title: str, body: str) -> None:
+        self._tray.showMessage(
+            title,
+            body,
+            QSystemTrayIcon.MessageIcon.Information,
+            5000,
+        )
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:

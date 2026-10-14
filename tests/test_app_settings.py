@@ -30,3 +30,13 @@ def test_unknown_mode_returns_default(tmp_path) -> None:
     path.write_text('{"tray_display_mode": "unknown"}', encoding="utf-8")
     settings = load_app_settings(path)
     assert settings.tray_display_mode == "total_percent"
+
+
+def test_with_tray_display_mode_preserves_notifications() -> None:
+    base = AppSettings(
+        tray_display_mode="total_percent",
+        usage_notifications={"on_demand": True},
+    )
+    updated = base.with_tray_display_mode("personal")
+    assert updated.tray_display_mode == "personal"
+    assert updated.usage_notifications == {"on_demand": True}
