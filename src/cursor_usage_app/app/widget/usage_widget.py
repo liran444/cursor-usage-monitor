@@ -9,7 +9,6 @@ from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -29,6 +28,7 @@ from cursor_usage_app.app.widget.formatting import (
 from cursor_usage_app.app.widget.gauge_widget import DonutGauge, MiniTotalGauge, SegmentedTotalGauge
 from cursor_usage_app.app.widget.material_icons import material_icon, material_pixmap
 from cursor_usage_app.app.widget.progress_bar import HorizontalBar
+from cursor_usage_app.app.widget.opacity_fade import OpacityFader
 from cursor_usage_app.app.widget.tray_settings_popup import TraySettingsPopup
 from cursor_usage_app.app.widget.view_model import (
     WidgetViewModel,
@@ -56,6 +56,8 @@ _LOGIN_POLL_MS = 2000
 _LOGIN_WAIT_MS = 120_000
 _MANUAL_REFRESH_COOLDOWN_MS = 5000
 _REFRESH_DIM_OPACITY = 0.42
+_DATA_DIM_OPACITY = 0.35
+_OPACITY_FADE_MS = 300
 _SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
 
 
@@ -107,6 +109,7 @@ class UsageWidget(QWidget):
         self._refresh_cooldown_timer = QTimer(self)
         self._refresh_cooldown_timer.setSingleShot(True)
         self._refresh_cooldown_timer.timeout.connect(self._end_manual_refresh_cooldown)
+        self._opacity_fader = OpacityFader(_OPACITY_FADE_MS)
 
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -535,13 +538,13 @@ class UsageWidget(QWidget):
 
     def _apply_refresh_dim(self, dimmed: bool) -> None:
         if not dimmed:
-            self._btn_refresh.setGraphicsEffect(None)
+            self._opacity_fader.fade_to(
+                self._btn_refresh,
+                1.0,
+                remove_at_full=True,
+            )
             return
-        effect = self._btn_refresh.graphicsEffect()
-        if not isinstance(effect, QGraphicsOpacityEffect):
-            effect = QGraphicsOpacityEffect(self._btn_refresh)
-            self._btn_refresh.setGraphicsEffect(effect)
-        effect.setOpacity(_REFRESH_DIM_OPACITY)
+        self._opacity_fader.fade_to(self._btn_refresh, _REFRESH_DIM_OPACITY)
 
     def _ensure_settings_popup(self) -> TraySettingsPopup:
         if self._settings_popup is not None:
@@ -978,13 +981,9 @@ class UsageWidget(QWidget):
             self._metadata_block,
         ):
             if not dimmed:
-                widget.setGraphicsEffect(None)
+                self._opacity_fader.fade_to(widget, 1.0, remove_at_full=True)
                 continue
-            effect = widget.graphicsEffect()
-            if not isinstance(effect, QGraphicsOpacityEffect):
-                effect = QGraphicsOpacityEffect(widget)
-                effect.setOpacity(0.35)
-                widget.setGraphicsEffect(effect)
+            self._opacity_fader.fade_to(widget, _DATA_DIM_OPACITY)
 
 
 _ROOT_STYLESHEET = """
