@@ -19,7 +19,7 @@ _SETTINGS_FILE_NAME = "settings.json"
 TrayDisplayMode = Literal["total_percent", "personal"]
 DEFAULT_TRAY_DISPLAY_MODE: TrayDisplayMode = "total_percent"
 
-ThemeId = Literal["dark", "light"]
+ThemeId = Literal["dark", "light", "system"]
 DEFAULT_THEME: ThemeId = "dark"
 
 
@@ -86,8 +86,8 @@ def _parse_tray_display_mode(raw: object) -> TrayDisplayMode:
 
 
 def _parse_theme(raw: object) -> ThemeId:
-    if raw == "light":
-        return "light"
+    if raw in ("light", "dark", "system"):
+        return raw
     return DEFAULT_THEME
 
 

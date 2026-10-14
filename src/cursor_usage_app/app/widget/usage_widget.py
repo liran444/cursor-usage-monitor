@@ -17,12 +17,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cursor_usage_app.app.widget.colors import (
-    active_palette,
-    active_theme,
-    root_stylesheet,
-    set_active_theme,
+from cursor_usage_app.app.widget.appearance_theme import (
+    apply_theme_preference,
+    applied_theme_matches_preference,
 )
+from cursor_usage_app.app.widget.colors import active_palette, active_theme, root_stylesheet
 from cursor_usage_app.app.widget.fetch_worker import load_cache, start_fetch_in_thread
 from cursor_usage_app.app.widget.formatting import (
     format_datetime_display,
@@ -117,7 +116,7 @@ class UsageWidget(QWidget):
         self._login_import_failed.connect(self._on_import_error)
         self._refresh_metrics_locked = False
         self._app_settings = load_app_settings()
-        set_active_theme(self._app_settings.theme)
+        apply_theme_preference(self._app_settings.theme)
         self._refresh_frames: list[QIcon] = []
         self._content_frames: list[QIcon] = []
         self._settings_popup: TraySettingsPopup | None = None
@@ -128,6 +127,7 @@ class UsageWidget(QWidget):
         self._refresh_cooldown_timer.timeout.connect(self._end_manual_refresh_cooldown)
         self._opacity_fader = OpacityFader(_OPACITY_FADE_MS)
         self._notify_bells_by_section: dict[str, list[SectionNotifyBell]] = {}
+        self._system_theme_listener_hooked = False
 
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -622,6 +622,7 @@ class UsageWidget(QWidget):
         self._radio_total = popup.radio_total
         self._radio_personal = popup.radio_personal
         self._tray_display_group = popup.button_group
+        self._radio_theme_system = popup.radio_theme_system
         self._radio_theme_dark = popup.radio_theme_dark
         self._radio_theme_light = popup.radio_theme_light
         self._theme_group = popup.theme_group
@@ -645,9 +646,7 @@ class UsageWidget(QWidget):
     def _show_settings_popup(self, at_global: QPoint | None = None) -> None:
         self._hide_token_editor()
         self._app_settings = load_app_settings()
-        if active_theme() != self._app_settings.theme:
-            set_active_theme(self._app_settings.theme)
-            self._apply_active_theme()
+        self._sync_theme_from_settings()
         popup = self._ensure_settings_popup()
         self._sync_tray_display_radios()
         self._sync_theme_radios()
@@ -687,18 +686,56 @@ class UsageWidget(QWidget):
         self._theme_group.blockSignals(True)
         if self._app_settings.theme == "light":
             self._radio_theme_light.setChecked(True)
-        else:
+        elif self._app_settings.theme == "dark":
             self._radio_theme_dark.setChecked(True)
+        else:
+            self._radio_theme_system.setChecked(True)
         self._theme_group.blockSignals(False)
+
+    def _sync_theme_from_settings(self) -> None:
+        self._ensure_system_theme_listener()
+        if applied_theme_matches_preference(self._app_settings.theme):
+            return
+        apply_theme_preference(self._app_settings.theme)
+        self._apply_active_theme()
+
+    def _ensure_system_theme_listener(self) -> None:
+        if self._system_theme_listener_hooked:
+            return
+        from PySide6.QtGui import QGuiApplication
+
+        app = QGuiApplication.instance()
+        if app is None:
+            return
+        hints = app.styleHints()
+        if not hasattr(hints, "colorSchemeChanged"):
+            return
+        hints.colorSchemeChanged.connect(self._on_system_color_scheme_changed)
+        self._system_theme_listener_hooked = True
+
+    def _on_system_color_scheme_changed(self, _scheme) -> None:
+        self._app_settings = load_app_settings()
+        if self._app_settings.theme != "system":
+            return
+        previous = active_theme()
+        resolved = apply_theme_preference("system")
+        if resolved == previous:
+            return
+        self._apply_active_theme()
 
     def _on_theme_button_toggled(self, button, checked: bool) -> None:
         if not checked:
             return
-        theme: ThemeId = "light" if button is self._radio_theme_light else "dark"
+        if button is self._radio_theme_light:
+            theme: ThemeId = "light"
+        elif button is self._radio_theme_dark:
+            theme = "dark"
+        else:
+            theme = "system"
         if self._app_settings.theme == theme:
             return
         self._app_settings = mutate_app_settings(lambda current: current.with_theme(theme))
-        set_active_theme(theme)
+        apply_theme_preference(theme)
         self._apply_active_theme()
 
     def _apply_active_theme(self) -> None:
@@ -1062,9 +1099,7 @@ class UsageWidget(QWidget):
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self._app_settings = load_app_settings()
-        if active_theme() != self._app_settings.theme:
-            set_active_theme(self._app_settings.theme)
-            self._apply_active_theme()
+        self._sync_theme_from_settings()
         self._sync_notify_bells_from_settings()
         if self._settings_popup is not None:
             self._sync_tray_display_radios()

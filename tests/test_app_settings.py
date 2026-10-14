@@ -91,6 +91,15 @@ def test_light_theme_round_trip(tmp_path) -> None:
     assert raw["theme"] == "light"
 
 
+def test_system_theme_round_trip(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    save_app_settings(AppSettings(theme="system"), path)
+    loaded = load_app_settings(path)
+    assert loaded.theme == "system"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["theme"] == "system"
+
+
 def test_unknown_theme_returns_dark(tmp_path) -> None:
     path = tmp_path / "settings.json"
     path.write_text('{"theme": "sepia"}', encoding="utf-8")

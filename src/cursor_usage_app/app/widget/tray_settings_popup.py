@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QCursor
-from PySide6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QLabel, QRadioButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QButtonGroup, QFrame, QLabel, QRadioButton, QVBoxLayout, QWidget
 
 from cursor_usage_app.app.widget.colors import popup_stylesheet
 from cursor_usage_app.settings.app_settings import default_settings_path
@@ -38,24 +38,22 @@ class TraySettingsPopup(QFrame):
         appearance.setObjectName("sectionTitle")
         layout.addWidget(appearance)
 
-        appearance_hint = QLabel("Light or dark colors for this window.")
+        appearance_hint = QLabel("Match Windows, or choose light or dark for this window.")
         appearance_hint.setObjectName("mutedLabel")
         appearance_hint.setWordWrap(True)
         layout.addWidget(appearance_hint)
 
+        self.radio_theme_system = QRadioButton("System")
         self.radio_theme_dark = QRadioButton("Dark")
         self.radio_theme_light = QRadioButton("Light")
         self.theme_group = QButtonGroup(self)
         self.theme_group.setExclusive(True)
+        self.theme_group.addButton(self.radio_theme_system)
         self.theme_group.addButton(self.radio_theme_dark)
         self.theme_group.addButton(self.radio_theme_light)
-        theme_row = QHBoxLayout()
-        theme_row.setContentsMargins(0, 0, 0, 0)
-        theme_row.setSpacing(12)
-        theme_row.addWidget(self.radio_theme_dark)
-        theme_row.addWidget(self.radio_theme_light)
-        theme_row.addStretch()
-        layout.addLayout(theme_row)
+        layout.addWidget(self.radio_theme_system)
+        layout.addWidget(self.radio_theme_dark)
+        layout.addWidget(self.radio_theme_light)
 
         layout.addSpacing(8)
 
@@ -78,6 +76,7 @@ class TraySettingsPopup(QFrame):
         layout.addWidget(self.radio_personal)
 
         for button in (
+            self.radio_theme_system,
             self.radio_theme_dark,
             self.radio_theme_light,
             self.radio_total,

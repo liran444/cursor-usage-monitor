@@ -49,14 +49,15 @@ def test_settings_popup_offers_independent_theme_and_tray_choices(qapp) -> None:
     from cursor_usage_app.app.widget.tray_settings_popup import TraySettingsPopup
 
     popup = TraySettingsPopup()
-    popup.radio_theme_light.setChecked(True)
+    popup.radio_theme_system.setChecked(True)
     popup.radio_total.setChecked(True)
-    assert popup.radio_theme_light.isChecked() is True
+    assert popup.radio_theme_system.isChecked() is True
     assert popup.radio_theme_dark.isChecked() is False
     assert popup.radio_total.isChecked() is True
 
     popup.radio_theme_dark.setChecked(True)
     assert popup.radio_theme_dark.isChecked() is True
+    assert popup.radio_theme_system.isChecked() is False
     assert popup.radio_total.isChecked() is True
     assert popup.radio_personal.isChecked() is False
 

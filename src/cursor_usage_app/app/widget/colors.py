@@ -219,8 +219,8 @@ def active_theme() -> ThemeName:
     return _ACTIVE
 
 
-def set_active_theme(theme: str) -> None:
-    """Select the palette painters and stylesheets read. Unknown values stay dark."""
+def set_active_theme(theme: ThemeName | str) -> None:
+    """Select the resolved dark/light palette painters and stylesheets read."""
     global _ACTIVE
     _ACTIVE = "light" if theme == "light" else "dark"
 
