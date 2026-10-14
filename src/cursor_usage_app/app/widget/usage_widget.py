@@ -397,22 +397,23 @@ class UsageWidget(QWidget):
         od_header = QHBoxLayout()
         od_title = QLabel("On Demand Usage")
         od_title.setObjectName("cardTitle")
-        self._od_pct = QLabel()
-        self._od_pct.setObjectName("coralPercent")
         od_header.addWidget(od_title)
         od_header.addStretch()
         self._bell_on_demand = self._make_notify_bell("on_demand")
         od_header.addWidget(self._bell_on_demand)
-        od_header.addWidget(self._od_pct)
         od_layout.addLayout(od_header)
-        self._od_subcopy = QLabel()
-        self._od_subcopy.setObjectName("mutedLabel")
-        od_layout.addWidget(self._od_subcopy)
+        od_usage_row = QHBoxLayout()
+        od_usage_row.setSpacing(8)
+        self._od_amount = QLabel()
+        self._od_amount.setObjectName("onDemandAmount")
+        self._od_pct = QLabel()
+        self._od_pct.setObjectName("onDemandPercent")
+        od_usage_row.addWidget(self._od_amount)
+        od_usage_row.addStretch()
+        od_usage_row.addWidget(self._od_pct)
+        od_layout.addLayout(od_usage_row)
         self._od_bar = HorizontalBar(colors.CORAL)
         od_layout.addWidget(self._od_bar)
-        self._od_footer = QLabel()
-        self._od_footer.setObjectName("cardFooter")
-        od_layout.addWidget(self._od_footer)
         root.addWidget(self._on_demand_card)
 
         self._rule_before_actions = _section_rule()
@@ -772,13 +773,9 @@ class UsageWidget(QWidget):
         od = snapshot.on_demand_display
         if od.show_card:
             self._od_pct.setText(format_percent(od.progress_percent))
-            pool = "Team" if od.pool_kind == "team" else "Personal"
-            self._od_subcopy.setText(
-                f"On-Demand: {format_usd(od.personal_on_demand_used_usd)} used / Pool: {pool}"
-            )
-            self._od_bar.set_percent(od.progress_percent)
             footer_pool = "Team Pool" if od.pool_kind == "team" else "Personal Pool"
-            self._od_footer.setText(f"{format_usd(od.on_demand_used_usd)} / {footer_pool}")
+            self._od_amount.setText(f"{format_usd(od.on_demand_used_usd)} / {footer_pool}")
+            self._od_bar.set_percent(od.progress_percent)
 
     def _clear_data_fields(self) -> None:
         self._personal_amount.setText("—")
@@ -1054,6 +1051,16 @@ QLabel#greenPercent {
 QLabel#coralPercent {
     color: #ee6854;
     font-size: 15px;
+    font-weight: 700;
+}
+QLabel#onDemandAmount {
+    color: #f7f7f8;
+    font-size: 14px;
+    font-weight: 700;
+}
+QLabel#onDemandPercent {
+    color: #ee6854;
+    font-size: 13px;
     font-weight: 700;
 }
 QLabel#mutedLabel {
