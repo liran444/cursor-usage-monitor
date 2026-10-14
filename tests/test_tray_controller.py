@@ -66,3 +66,21 @@ def test_first_launch_attempts_import_when_store_empty(
     assert controller._poll_timer.interval() == 60_000
 
     controller._tray.hide()
+
+
+def test_startup_opens_widget(qapp, tmp_path: Path) -> None:
+    store = SessionStore(fallback_path=tmp_path / "session_token")
+    store.set_token("user_01::test")
+
+    controller = TrayController(
+        store=store,
+        cache_path=tmp_path / "usage_cache.json",
+        poll_interval_ms=60_000,
+    )
+    assert controller._window.isVisible() is False
+    controller.show_tray()
+    for _ in range(50):
+        qapp.processEvents()
+
+    assert controller._window.isVisible() is True
+    controller._tray.hide()

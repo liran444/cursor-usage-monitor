@@ -69,6 +69,7 @@ class TrayController(QObject):
             _LOGGER.warning("System tray is not available on this platform.")
         self._tray.show()
         self._poll_timer.start()
+        QTimer.singleShot(0, self._open_widget)
 
     def _build_menu(self) -> None:
         menu = QMenu()
