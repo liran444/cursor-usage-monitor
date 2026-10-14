@@ -97,15 +97,7 @@ cursor_usage_install_app() {
   rm -rf "${INSTALL_ROOT:?}/"*
   cp -a "$payload_dir/." "$INSTALL_ROOT/"
 
-  cat > "$BIN_DIR/cursor-usage" <<EOF
-#!/usr/bin/env bash
-exec "${INSTALL_ROOT}/cursor-usage-tray" "\$@"
-EOF
-  chmod +x "$BIN_DIR/cursor-usage"
-
-  if [[ -x "${INSTALL_ROOT}/cursor-usage" ]]; then
-    ln -sf "${INSTALL_ROOT}/cursor-usage" "$BIN_DIR/cursor-usage-cli"
-  fi
+  ln -sf "${INSTALL_ROOT}/cursor-usage" "$BIN_DIR/cursor-usage"
 
   cp "$SCRIPT_DIR/uninstall.sh" "$INSTALL_ROOT/uninstall.sh"
   chmod +x "$INSTALL_ROOT/uninstall.sh"
@@ -115,7 +107,7 @@ EOF
 Type=Application
 Name=Cursor Usage
 Comment=Cursor usage monitor tray
-Exec=${INSTALL_ROOT}/cursor-usage-tray
+Exec=${INSTALL_ROOT}/cursor-usage
 Icon=preferences-system
 Terminal=false
 Categories=Utility;

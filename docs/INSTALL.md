@@ -12,7 +12,7 @@ Installers are built from tagged releases or CI artifacts (see [DEVELOPMENT.md](
 
 ## After install
 
-- **Windows:** Start Menu → **Cursor Usage** (tray). Command line: `cursor-usage.exe` in `Program Files\Cursor Usage\`.
+- **Windows:** Start Menu → **Cursor Usage** (`cursor-usage.exe` in `Program Files\Cursor Usage\`).
 - **macOS:** Applications → **Cursor Usage** (menu bar tray).
 - **Linux:** Applications menu → **Cursor Usage**, or `cursor-usage` on PATH (`~/.local/bin`).
 

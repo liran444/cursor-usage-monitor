@@ -24,9 +24,10 @@
 
 | | Development | Installed |
 |---|-------------|-----------|
-| Windows tray | `cursor-usage tray` | `cursor-usage-tray.exe` |
-| Windows CLI | `cursor-usage token …` | `cursor-usage.exe token …` |
-| Linux tray | `cursor-usage tray` | `cursor-usage` → `cursor-usage-tray` |
+| Windows | `cursor-usage tray` (Python / pip) | `cursor-usage.exe` (tray + widget only) |
+| Linux | `cursor-usage tray` | `cursor-usage` on PATH |
 | macOS | `cursor-usage tray` | **Cursor Usage.app** |
+
+Released builds are GUI-only (tray and widget). Token and refresh are in the app UI. Developers can still use the `cursor-usage` CLI from a source install.
 
 Config: `cursor-usage-app/settings.json` under the OS user config directory. Cache: `usage_cache.json` under user cache.

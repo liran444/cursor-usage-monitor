@@ -39,8 +39,7 @@ Version is read from `pyproject.toml` (`project.version`).
 
 After building `dist/cursor-usage/` or installing from `release/`:
 
-- [ ] `cursor-usage-tray` with `CURSOR_USAGE_TRAY_SMOKE_MS=2000` exits without traceback.
-- [ ] `cursor-usage --help` and `cursor-usage token test` (expect failure without token, not import errors).
+- [ ] `cursor-usage.exe` (or `dist/.../cursor-usage` on Linux) with `CURSOR_USAGE_TRAY_SMOKE_MS=2000` exits without traceback.
 - [ ] Open widget from tray; gear icons (qt-material-icons) render.
 - [ ] Windows: taskbar shows app icon, not Python.
 

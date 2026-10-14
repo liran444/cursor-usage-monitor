@@ -92,12 +92,6 @@ Uses the stored token and updates `usage_cache.json` (see cache contract in the 
 
 ## Installed application (frozen builds)
 
-Commands are the same; only the executable path changes:
+Release installers ship a **GUI app only** (system tray + widget). Set or import your token from the tray menu or widget (**Set token…**, **Import session**). There is no separate command-line tool in the installed package.
 
-| OS | Tray (default) | Command line |
-|----|----------------|--------------|
-| Windows | `Cursor Usage` Start Menu → `cursor-usage-tray.exe` | `"C:\Program Files\Cursor Usage\cursor-usage.exe" token test` |
-| macOS | **Cursor Usage** in Applications | `"/Applications/Cursor Usage.app/Contents/MacOS/cursor-usage" token test` (if CLI binary is bundled) |
-| Linux | Applications menu or `cursor-usage` | `cursor-usage-cli token test` when CLI symlink is present, else `~/.local/share/cursor-usage/current/cursor-usage` |
-
-See [INSTALL.md](INSTALL.md) and [platforms.md](platforms.md).
+See [INSTALL.md](INSTALL.md) and [platforms.md](platforms.md). For terminal-based token management, use a [development install](DEVELOPMENT.md).

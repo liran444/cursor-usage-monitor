@@ -13,7 +13,7 @@ INSTALL_ROOT="${HOME}/.local/share/cursor-usage/${VERSION}"
 BIN_DIR="${HOME}/.local/bin"
 DESKTOP_DIR="${HOME}/.local/share/applications"
 
-rm -f "$BIN_DIR/cursor-usage" "$BIN_DIR/cursor-usage-cli"
+rm -f "$BIN_DIR/cursor-usage"
 rm -f "$DESKTOP_DIR/cursor-usage.desktop"
 rm -rf "$INSTALL_ROOT"
 rm -f "${HOME}/.local/share/cursor-usage/current"

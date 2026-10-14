@@ -80,7 +80,7 @@ main() {
   gui_info "Cursor Usage" "Installation complete. Start “Cursor Usage” from your applications menu or run: cursor-usage"
 
   if gui_question "Cursor Usage" "Launch Cursor Usage now?"; then
-    "${HOME}/.local/share/cursor-usage/current/cursor-usage-tray" &
+    "${HOME}/.local/share/cursor-usage/current/cursor-usage" &
   fi
 }
 

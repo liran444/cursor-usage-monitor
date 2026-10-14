@@ -8,8 +8,7 @@
 
 #define AppName "Cursor Usage"
 #define AppPublisher "Cursor Usage Monitor"
-#define AppExeName "cursor-usage-tray.exe"
-#define CliExeName "cursor-usage.exe"
+#define AppExeName "cursor-usage.exe"
 #define DistDir RepoRoot + "\dist\cursor-usage"
 
 [Setup]
@@ -44,7 +43,6 @@ Source: "redist\vc_redist.x64.exe"; Flags: dontcopy
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
-Name: "{group}\{#AppName} (command line)"; Filename: "{app}\{#CliExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: startup
 
