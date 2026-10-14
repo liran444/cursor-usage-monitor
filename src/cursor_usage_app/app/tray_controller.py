@@ -71,6 +71,16 @@ class TrayController(QObject):
     def _build_menu(self) -> None:
         menu = QMenu()
 
+        open_action = QAction("Open", menu)
+        open_action.triggered.connect(self._open_widget)
+        menu.addAction(open_action)
+
+        settings_action = QAction("Settings", menu)
+        settings_action.triggered.connect(self._open_settings)
+        menu.addAction(settings_action)
+
+        menu.addSeparator()
+
         refresh_action = QAction("Refresh", menu)
         refresh_action.triggered.connect(self.refresh)
         menu.addAction(refresh_action)
@@ -141,6 +151,13 @@ class TrayController(QObject):
                 QSystemTrayIcon.MessageIcon.Warning,
                 6000,
             )
+
+    def _open_widget(self) -> None:
+        self._reveal_widget()
+
+    def _open_settings(self) -> None:
+        self._reveal_widget()
+        QTimer.singleShot(0, self._window.widget().open_settings_panel)
 
     def _open_set_token(self) -> None:
         self._reveal_widget()

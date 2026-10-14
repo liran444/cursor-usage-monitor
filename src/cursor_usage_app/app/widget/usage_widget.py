@@ -568,6 +568,19 @@ class UsageWidget(QWidget):
     def _release_settings_suppress(self) -> None:
         self._suppress_settings_open = False
 
+    def open_settings_panel(self) -> None:
+        """Show tray display settings (tray menu or in-widget gear)."""
+        self._suppress_settings_open = False
+        self._show_settings_popup()
+
+    def _show_settings_popup(self) -> None:
+        self._hide_token_editor()
+        self._app_settings = load_app_settings()
+        popup = self._ensure_settings_popup()
+        self._sync_tray_display_radios()
+        popup.position_below(self._btn_settings)
+        popup.show()
+
     def _toggle_settings_popup(self) -> None:
         if self._suppress_settings_open:
             self._suppress_settings_open = False
@@ -576,11 +589,7 @@ class UsageWidget(QWidget):
         if popup.isVisible():
             popup.hide()
             return
-        self._hide_token_editor()
-        self._app_settings = load_app_settings()
-        self._sync_tray_display_radios()
-        popup.position_below(self._btn_settings)
-        popup.show()
+        self._show_settings_popup()
 
     def _hide_settings_popup(self) -> None:
         if self._settings_popup is not None:
