@@ -156,8 +156,11 @@ class TrayController(QObject):
         self._reveal_widget()
 
     def _open_settings(self) -> None:
-        self._reveal_widget()
-        QTimer.singleShot(0, self._window.widget().open_settings_panel)
+        menu_pos = QCursor.pos()
+        QTimer.singleShot(
+            0,
+            lambda: self._window.widget().open_settings_panel(at_global=menu_pos),
+        )
 
     def _open_set_token(self) -> None:
         self._reveal_widget()

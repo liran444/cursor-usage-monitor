@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QButtonGroup, QFrame, QLabel, QRadioButton, QVBoxLayout, QWidget
 
@@ -98,6 +98,13 @@ class TraySettingsPopup(QFrame):
         global_bottom_right = anchor.mapToGlobal(anchor.rect().bottomRight())
         x = global_bottom_right.x() - self.width()
         y = global_bottom_right.y() + 4
+        self.move(x, y)
+
+    def position_near_global(self, point: QPoint) -> None:
+        """Place popup above the point, right-aligned (e.g. tray context menu)."""
+        self.adjustSize()
+        x = point.x() - self.width()
+        y = point.y() - self.height() - 8
         self.move(x, y)
 
     def hideEvent(self, event) -> None:  # noqa: N802

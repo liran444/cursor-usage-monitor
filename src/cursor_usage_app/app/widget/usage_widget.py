@@ -5,7 +5,7 @@ from __future__ import annotations
 import webbrowser
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -388,22 +388,6 @@ class UsageWidget(QWidget):
         od_layout.addWidget(self._od_footer)
         root.addWidget(self._on_demand_card)
 
-        self._rule_before_summary = _section_rule()
-        root.addWidget(self._rule_before_summary)
-
-        # Summary lines
-        self._summary_block = QWidget()
-        summary_layout = QVBoxLayout(self._summary_block)
-        summary_layout.setContentsMargins(0, 6, 0, 0)
-        summary_layout.setSpacing(2)
-        self._summary_personal = QLabel()
-        self._summary_personal_od = QLabel()
-        self._summary_team = QLabel()
-        for label in (self._summary_personal, self._summary_personal_od, self._summary_team):
-            label.setObjectName("mutedLabel")
-            summary_layout.addWidget(label)
-        root.addWidget(self._summary_block)
-
         self._rule_before_actions = _section_rule()
         root.addWidget(self._rule_before_actions)
 
@@ -568,17 +552,20 @@ class UsageWidget(QWidget):
     def _release_settings_suppress(self) -> None:
         self._suppress_settings_open = False
 
-    def open_settings_panel(self) -> None:
+    def open_settings_panel(self, at_global: QPoint | None = None) -> None:
         """Show tray display settings (tray menu or in-widget gear)."""
         self._suppress_settings_open = False
-        self._show_settings_popup()
+        self._show_settings_popup(at_global=at_global)
 
-    def _show_settings_popup(self) -> None:
+    def _show_settings_popup(self, at_global: QPoint | None = None) -> None:
         self._hide_token_editor()
         self._app_settings = load_app_settings()
         popup = self._ensure_settings_popup()
         self._sync_tray_display_radios()
-        popup.position_below(self._btn_settings)
+        if at_global is not None:
+            popup.position_near_global(at_global)
+        else:
+            popup.position_below(self._btn_settings)
         popup.show()
 
     def _toggle_settings_popup(self) -> None:
@@ -736,10 +723,6 @@ class UsageWidget(QWidget):
                 f"{format_usd(snapshot.team_pool.limit_usd)}"
             )
             self._team_pct.setText(format_percent(team_pct))
-            self._summary_team.setText(f"Team ({format_percent(team_pct)})")
-            self._summary_team.show()
-        else:
-            self._summary_team.hide()
 
         od = snapshot.on_demand_display
         if od.show_card:
@@ -752,13 +735,6 @@ class UsageWidget(QWidget):
             footer_pool = "Team Pool" if od.pool_kind == "team" else "Personal Pool"
             self._od_footer.setText(f"{format_usd(od.on_demand_used_usd)} / {footer_pool}")
 
-        self._summary_personal.setText(
-            f"Personal: {format_usd(snapshot.personal.used_usd)} / "
-            f"{format_usd(snapshot.personal.limit_usd)}"
-        )
-        personal_od = snapshot.personal_on_demand.used_usd if snapshot.personal_on_demand else None
-        self._summary_personal_od.setText(f"Personal on-demand: {format_usd(personal_od)}")
-
     def _clear_data_fields(self) -> None:
         self._personal_amount.setText("—")
         self._personal_pct.setText("—")
@@ -769,9 +745,6 @@ class UsageWidget(QWidget):
         self._api_gauge.set_percent(None)
         self._auto_gauge.set_percent(None)
         self._compact_total_pct.setText("—")
-        self._summary_personal.setText("Personal: —")
-        self._summary_personal_od.setText("Personal on-demand: —")
-        self._summary_team.hide()
         self._meta_reset.setText("Next Reset:    —")
 
     def _apply_compact_visibility(self) -> None:
@@ -794,7 +767,6 @@ class UsageWidget(QWidget):
         self._on_demand_card.setVisible(
             show_data and not compact and self._view_model.show_on_demand_card
         )
-        self._summary_block.setVisible(show_data and not compact)
         self._metadata_block.setVisible(show_data and not compact)
         self._action_row.setVisible(not login)
         self._btn_settings.setVisible(not login)
@@ -810,7 +782,6 @@ class UsageWidget(QWidget):
             self._rule_before_team.setVisible(False)
             self._rule_before_gauges.setVisible(False)
             self._rule_before_on_demand.setVisible(False)
-            self._rule_before_summary.setVisible(False)
             self._rule_before_actions.setVisible(True)
             self._rule_before_metadata.setVisible(False)
             return
@@ -818,7 +789,6 @@ class UsageWidget(QWidget):
         self._rule_before_team.setVisible(not self._team_block.isHidden())
         self._rule_before_gauges.setVisible(not compact)
         self._rule_before_on_demand.setVisible(not self._on_demand_card.isHidden())
-        self._rule_before_summary.setVisible(not compact)
         self._rule_before_actions.setVisible(True)
         self._rule_before_metadata.setVisible(not compact)
 
@@ -984,8 +954,6 @@ class UsageWidget(QWidget):
             self._gauge_block,
             self._rule_before_on_demand,
             self._on_demand_card,
-            self._rule_before_summary,
-            self._summary_block,
             self._rule_before_metadata,
             self._metadata_block,
         ):

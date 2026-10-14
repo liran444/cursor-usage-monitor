@@ -11,10 +11,10 @@
       "totalPercentUsed": 0.638383838383838
     },
     "onDemand": {
-      "enabled": false,
-      "used": 0,
-      "limit": null,
-      "remaining": null
+      "enabled": true,
+      "used": 850,
+      "limit": 5000,
+      "remaining": 4150
     }
   },
   "teamUsage": {}

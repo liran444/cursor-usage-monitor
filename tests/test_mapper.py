@@ -44,8 +44,13 @@ def test_personal_pool_from_plan_when_individual_totals_missing() -> None:
     assert snapshot.personal.limit_usd == pytest.approx(20.0)
     assert snapshot.plan_percents.total_percent_used == pytest.approx(0.638383838383838)
     assert snapshot.personal_on_demand is not None
-    assert snapshot.personal_on_demand.used_usd == 0.0
-    assert snapshot.on_demand_display.show_card is False
+    assert snapshot.personal_on_demand.used_usd == 8.5
+    assert snapshot.personal_on_demand.limit_usd == 50.0
+    display = snapshot.on_demand_display
+    assert display.show_card is True
+    assert display.pool_kind == "personal"
+    assert display.progress_percent == pytest.approx(17.0)
+    assert display.on_demand_used_usd == 8.5
 
 
 def test_hides_on_demand_when_absent() -> None:
