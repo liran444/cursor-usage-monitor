@@ -2,7 +2,7 @@
 # Build makeself .run installer from dist/cursor-usage/
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-VERSION="$("$REPO_ROOT/scripts/build/read_version.py")"
+VERSION="$(python3 "$REPO_ROOT/scripts/build/read_version.py")"
 STAGING="$REPO_ROOT/build/linux-installer-staging"
 RELEASE="$REPO_ROOT/release"
 DIST="$REPO_ROOT/dist/cursor-usage"

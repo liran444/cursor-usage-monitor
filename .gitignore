@@ -1,10 +1,10 @@
 .venv/
 venv/
 dist/
-build/
+/build/
 release/
-build/linux-installer-staging/
-build/macos-pkg-staging/
+/build/linux-installer-staging/
+/build/macos-pkg-staging/
 scripts/install/windows/redist/
 *.egg-info/
 .pytest_cache/

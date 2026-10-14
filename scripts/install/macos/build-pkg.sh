@@ -2,7 +2,7 @@
 # Build macOS .pkg from PyInstaller Cursor Usage.app
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-VERSION="$("$REPO_ROOT/scripts/build/read_version.py")"
+VERSION="$(python3 "$REPO_ROOT/scripts/build/read_version.py")"
 RELEASE="$REPO_ROOT/release"
 MACOS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
