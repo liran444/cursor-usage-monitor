@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QCursor, QGuiApplication, QKeyEvent, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-from cursor_usage_app.app.widget import colors
+from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
 from cursor_usage_app.auth.session_store import SessionStore
 
@@ -50,8 +50,9 @@ class UsageWindow(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(1, 1, -1, -1)
-        painter.setBrush(colors.BG_WINDOW)
-        painter.setPen(QPen(colors.BORDER_WINDOW, 1))
+        palette = active_palette()
+        painter.setBrush(QColor(palette.bg_window))
+        painter.setPen(QPen(QColor(palette.border_window), 1))
         painter.drawRoundedRect(rect, 18, 18)
 
     def resizeEvent(self, event) -> None:  # noqa: N802

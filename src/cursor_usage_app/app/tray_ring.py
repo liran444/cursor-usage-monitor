@@ -8,6 +8,8 @@ from typing import Literal
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPen, QPixmap
 
+# Dark-palette constants. The tray icon ignores the widget theme so the
+# ring stays readable on a dark taskbar.
 from cursor_usage_app.app.widget import colors
 from cursor_usage_app.app.widget.formatting import format_pool_percent
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, CacheEnvelopeError, CacheEnvelopeOk

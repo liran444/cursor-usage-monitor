@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QWidget
 
-from cursor_usage_app.app.widget import colors
+from cursor_usage_app.app.widget.colors import active_palette
 
 
 class HorizontalBar(QWidget):
@@ -20,6 +20,10 @@ class HorizontalBar(QWidget):
         self._percent = value
         self.update()
 
+    def set_fill_color(self, color: QColor) -> None:
+        self._fill_color = color
+        self.update()
+
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -28,7 +32,7 @@ class HorizontalBar(QWidget):
         radius = h / 2.0
         track = QRectF(0.0, 0.0, w, h)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(colors.BAR_TRACK)
+        painter.setBrush(QColor(active_palette().bar_track))
         painter.drawRoundedRect(track, radius, radius)
 
         if self._percent is not None and self._percent > 0.0:

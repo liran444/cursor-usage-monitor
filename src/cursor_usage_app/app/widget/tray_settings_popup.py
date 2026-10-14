@@ -1,50 +1,15 @@
-"""Tray display settings as a popup under the gear button."""
+"""Widget settings as a popup under the gear button."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QCursor
-from PySide6.QtWidgets import QButtonGroup, QFrame, QLabel, QRadioButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QLabel, QRadioButton, QVBoxLayout, QWidget
 
+from cursor_usage_app.app.widget.colors import popup_stylesheet
 from cursor_usage_app.settings.app_settings import default_settings_path
 
 _POPUP_WIDTH = 248
-
-_POPUP_STYLESHEET = """
-#traySettingsPopup {
-    background-color: #38393c;
-    border: 1px solid #52545a;
-    border-radius: 10px;
-}
-#traySettingsPopup QLabel {
-    background: transparent;
-    border: none;
-    color: #f4f4f5;
-}
-#traySettingsPopup QLabel#sectionTitle {
-    font-size: 14px;
-    font-weight: 600;
-}
-#traySettingsPopup QLabel#mutedLabel {
-    color: #c4c4c6;
-    font-size: 11px;
-}
-#traySettingsPopup QLabel#settingsPathLabel {
-    color: #9a9a9e;
-    font-size: 10px;
-}
-#traySettingsPopup QRadioButton {
-    color: #ececee;
-    font-size: 12px;
-    spacing: 6px;
-    padding-left: 4px;
-}
-#traySettingsPopup QRadioButton::indicator {
-    width: 14px;
-    height: 14px;
-    margin-left: 2px;
-}
-"""
 
 
 class TraySettingsPopup(QFrame):
@@ -62,12 +27,37 @@ class TraySettingsPopup(QFrame):
         self._anchor = anchor
         self.setObjectName("traySettingsPopup")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(_POPUP_STYLESHEET)
+        self.apply_active_palette()
         self.setFixedWidth(_POPUP_WIDTH)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(6)
+
+        appearance = QLabel("Appearance")
+        appearance.setObjectName("sectionTitle")
+        layout.addWidget(appearance)
+
+        appearance_hint = QLabel("Light or dark colors for this window.")
+        appearance_hint.setObjectName("mutedLabel")
+        appearance_hint.setWordWrap(True)
+        layout.addWidget(appearance_hint)
+
+        self.radio_theme_dark = QRadioButton("Dark")
+        self.radio_theme_light = QRadioButton("Light")
+        self.theme_group = QButtonGroup(self)
+        self.theme_group.setExclusive(True)
+        self.theme_group.addButton(self.radio_theme_dark)
+        self.theme_group.addButton(self.radio_theme_light)
+        theme_row = QHBoxLayout()
+        theme_row.setContentsMargins(0, 0, 0, 0)
+        theme_row.setSpacing(12)
+        theme_row.addWidget(self.radio_theme_dark)
+        theme_row.addWidget(self.radio_theme_light)
+        theme_row.addStretch()
+        layout.addLayout(theme_row)
+
+        layout.addSpacing(8)
 
         title = QLabel("Tray display")
         title.setObjectName("sectionTitle")
@@ -87,10 +77,21 @@ class TraySettingsPopup(QFrame):
         layout.addWidget(self.radio_total)
         layout.addWidget(self.radio_personal)
 
+        for button in (
+            self.radio_theme_dark,
+            self.radio_theme_light,
+            self.radio_total,
+            self.radio_personal,
+        ):
+            button.setAutoExclusive(False)
+
         path_label = QLabel(f"Saved to:\n{default_settings_path()}")
         path_label.setObjectName("settingsPathLabel")
         path_label.setWordWrap(True)
         layout.addWidget(path_label)
+
+    def apply_active_palette(self) -> None:
+        self.setStyleSheet(popup_stylesheet())
 
     def position_below(self, anchor: QWidget) -> None:
         """Align popup top-right under the anchor button."""

@@ -6,7 +6,7 @@ import webbrowser
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -17,7 +17,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cursor_usage_app.app.widget import colors
+from cursor_usage_app.app.widget.colors import (
+    active_palette,
+    active_theme,
+    root_stylesheet,
+    set_active_theme,
+)
 from cursor_usage_app.app.widget.fetch_worker import load_cache, start_fetch_in_thread
 from cursor_usage_app.app.widget.formatting import (
     format_datetime_display,
@@ -46,7 +51,7 @@ from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.auth.token_normalize import TokenNormalizeError
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, CacheEnvelopeOk, parse_cache_envelope
 from cursor_usage_app.domain.models import UsageSnapshot
-from cursor_usage_app.settings.app_settings import load_app_settings, mutate_app_settings
+from cursor_usage_app.settings.app_settings import ThemeId, load_app_settings, mutate_app_settings
 from cursor_usage_app.usage_notifications import (
     acknowledge_thresholds,
     notification_state_for_cycle,
@@ -112,6 +117,9 @@ class UsageWidget(QWidget):
         self._login_import_failed.connect(self._on_import_error)
         self._refresh_metrics_locked = False
         self._app_settings = load_app_settings()
+        set_active_theme(self._app_settings.theme)
+        self._refresh_frames: list[QIcon] = []
+        self._content_frames: list[QIcon] = []
         self._settings_popup: TraySettingsPopup | None = None
         self._suppress_settings_open = False
         self._manual_refresh_cooldown = False
@@ -124,7 +132,6 @@ class UsageWidget(QWidget):
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedWidth(_WIDGET_WIDTH)
-        self.setStyleSheet(_ROOT_STYLESHEET)
         self._build_ui()
         self.reload_from_cache()
 
@@ -207,12 +214,12 @@ class UsageWidget(QWidget):
         root.setSpacing(8)
 
         self._btn_settings = _icon_tool_button(
-            material_icon("settings", "#c4c4c6"),
+            QIcon(),
             "Settings",
             object_name="windowChromeButton",
         )
         self._btn_quit = _icon_tool_button(
-            material_icon("close", "#e7c4b8"),
+            QIcon(),
             "Hide",
             object_name="windowCloseButton",
         )
@@ -306,7 +313,7 @@ class UsageWidget(QWidget):
         personal_row.addWidget(self._personal_pct)
         personal_layout.addLayout(personal_row)
 
-        self._personal_bar = HorizontalBar(colors.CYAN)
+        self._personal_bar = HorizontalBar(QColor(active_palette().cyan))
         personal_layout.addWidget(self._personal_bar)
         root.addWidget(self._personal_card)
 
@@ -348,7 +355,6 @@ class UsageWidget(QWidget):
         team_row = QHBoxLayout()
         team_row.setSpacing(6)
         self._team_icon = QLabel()
-        self._team_icon.setPixmap(material_pixmap("group", colors.GREEN, size=16))
         self._team_icon.setFixedSize(16, 16)
         self._team_amount = QLabel()
         self._team_amount.setObjectName("amountLabel")
@@ -383,8 +389,9 @@ class UsageWidget(QWidget):
         gauge_row = QHBoxLayout()
         gauge_row.setSpacing(10)
         self._total_gauge = SegmentedTotalGauge()
-        self._api_gauge = DonutGauge("API", colors.CYAN)
-        self._auto_gauge = DonutGauge("AUTO", colors.VIOLET)
+        palette = active_palette()
+        self._api_gauge = DonutGauge("API", QColor(palette.cyan))
+        self._auto_gauge = DonutGauge("AUTO", QColor(palette.violet))
         gauge_row.addStretch(1)
         gauge_row.addWidget(self._total_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
         gauge_row.addWidget(self._api_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -420,7 +427,7 @@ class UsageWidget(QWidget):
         od_usage_row.addStretch()
         od_usage_row.addWidget(self._od_pct)
         od_layout.addLayout(od_usage_row)
-        self._od_bar = HorizontalBar(colors.CORAL)
+        self._od_bar = HorizontalBar(QColor(active_palette().coral))
         od_layout.addWidget(self._od_bar)
         root.addWidget(self._on_demand_card)
 
@@ -468,20 +475,16 @@ class UsageWidget(QWidget):
         self._btn_token = _pill_button("Set token...")
         root.addWidget(self._btn_token)
 
-        self._btn_toggle = _pill_button("Collapse", material_icon("expand_less", colors.AMBER))
+        self._btn_toggle = _pill_button("Collapse")
         self._btn_toggle.setObjectName("toggleButton")
         self._btn_toggle.setToolTip("Show less detail")
-        self._refresh_frames = _rotated_icons(material_icon("refresh", "#d1d5db"), 18)
-        self._btn_refresh = _pill_button("Refresh", self._refresh_frames[0])
+        self._btn_toggle.setIconSize(QSize(18, 18))
+        self._btn_refresh = _pill_button("Refresh")
         self._btn_refresh.setObjectName("refreshButton")
         self._btn_refresh.setProperty("refreshState", "idle")
         self._btn_refresh.setIconSize(QSize(18, 18))
-        self._content_frames = _rotated_icons(material_icon("progress_activity", colors.CYAN), 28)
-        self._loading_icon.setPixmap(self._content_frames[0].pixmap(28, 28))
-        self._btn_dashboard = _pill_button(
-            "Dashboard",
-            material_icon("open_in_new", "#d1d5db"),
-        )
+        self._btn_dashboard = _pill_button("Dashboard")
+        self._btn_dashboard.setIconSize(QSize(18, 18))
 
         self._action_row = QWidget()
         action_layout = QHBoxLayout(self._action_row)
@@ -521,6 +524,7 @@ class UsageWidget(QWidget):
         root.addWidget(self._metadata_block)
 
         self._apply_compact_visibility()
+        self._apply_active_theme()
         self._sync_notify_bells_from_settings()
         self._resize_to_mode()
 
@@ -610,11 +614,16 @@ class UsageWidget(QWidget):
         popup = TraySettingsPopup(host, anchor=self._btn_settings)
         popup.dismissed_via_anchor.connect(self._on_settings_dismissed_via_anchor)
         popup.button_group.buttonToggled.connect(self._on_tray_display_button_toggled)
+        popup.theme_group.buttonToggled.connect(self._on_theme_button_toggled)
         self._settings_popup = popup
         self._radio_total = popup.radio_total
         self._radio_personal = popup.radio_personal
         self._tray_display_group = popup.button_group
+        self._radio_theme_dark = popup.radio_theme_dark
+        self._radio_theme_light = popup.radio_theme_light
+        self._theme_group = popup.theme_group
         self._sync_tray_display_radios()
+        self._sync_theme_radios()
         return popup
 
     def _on_settings_dismissed_via_anchor(self) -> None:
@@ -626,15 +635,19 @@ class UsageWidget(QWidget):
         self._suppress_settings_open = False
 
     def open_settings_panel(self, at_global: QPoint | None = None) -> None:
-        """Show tray display settings (tray menu or in-widget gear)."""
+        """Show appearance and tray settings (tray menu or in-widget gear)."""
         self._suppress_settings_open = False
         self._show_settings_popup(at_global=at_global)
 
     def _show_settings_popup(self, at_global: QPoint | None = None) -> None:
         self._hide_token_editor()
         self._app_settings = load_app_settings()
+        if active_theme() != self._app_settings.theme:
+            set_active_theme(self._app_settings.theme)
+            self._apply_active_theme()
         popup = self._ensure_settings_popup()
         self._sync_tray_display_radios()
+        self._sync_theme_radios()
         if at_global is not None:
             popup.position_near_global(at_global)
         else:
@@ -664,6 +677,56 @@ class UsageWidget(QWidget):
         else:
             self._radio_total.setChecked(True)
         self._tray_display_group.blockSignals(False)
+
+    def _sync_theme_radios(self) -> None:
+        if self._settings_popup is None:
+            return
+        self._theme_group.blockSignals(True)
+        if self._app_settings.theme == "light":
+            self._radio_theme_light.setChecked(True)
+        else:
+            self._radio_theme_dark.setChecked(True)
+        self._theme_group.blockSignals(False)
+
+    def _on_theme_button_toggled(self, button, checked: bool) -> None:
+        if not checked:
+            return
+        theme: ThemeId = "light" if button is self._radio_theme_light else "dark"
+        if self._app_settings.theme == theme:
+            return
+        self._app_settings = mutate_app_settings(lambda current: current.with_theme(theme))
+        set_active_theme(theme)
+        self._apply_active_theme()
+
+    def _apply_active_theme(self) -> None:
+        palette = active_palette()
+        self.setStyleSheet(root_stylesheet(palette))
+        self._btn_settings.setIcon(material_icon("settings", palette.chrome_icon))
+        self._btn_quit.setIcon(material_icon("close", palette.close_icon))
+        self._refresh_frames = _rotated_icons("refresh", palette.action_icon, 18)
+        self._content_frames = _rotated_icons("progress_activity", palette.cyan, 28)
+        if self._refresh_busy or self._content_busy:
+            self._paint_busy_frame()
+        else:
+            self._btn_refresh.setIcon(self._refresh_frames[0])
+            self._loading_icon.setPixmap(self._content_frames[0].pixmap(28, 28))
+        self._btn_dashboard.setIcon(material_icon("open_in_new", palette.action_icon))
+        self._update_toggle_button()
+        self._team_icon.setPixmap(material_pixmap("group", palette.team_icon, size=16))
+        self._personal_bar.set_fill_color(QColor(palette.cyan))
+        self._od_bar.set_fill_color(QColor(palette.coral))
+        self._api_gauge.set_arc_color(QColor(palette.cyan))
+        self._auto_gauge.set_arc_color(QColor(palette.violet))
+        self._total_gauge.update()
+        self._mini_total.update()
+        for bells in self._notify_bells_by_section.values():
+            for bell in bells:
+                bell.set_notification_enabled(bell.isChecked())
+        if self._settings_popup is not None:
+            self._settings_popup.apply_active_palette()
+        window = self.window()
+        if window is not None and window is not self:
+            window.update()
 
     def _on_tray_display_button_toggled(self, button, checked: bool) -> None:
         if not checked:
@@ -982,21 +1045,26 @@ class UsageWidget(QWidget):
         self._btn_login.setText(_SPINNER_FRAMES[self._spinner_index])
 
     def _update_toggle_button(self) -> None:
+        icon_color = active_palette().toggle_text
         if self._compact:
-            self._btn_toggle.setIcon(material_icon("expand_more", colors.AMBER))
+            self._btn_toggle.setIcon(material_icon("expand_more", icon_color))
             self._btn_toggle.setText("Expand")
             self._btn_toggle.setToolTip("Show full details")
         else:
-            self._btn_toggle.setIcon(material_icon("expand_less", colors.AMBER))
+            self._btn_toggle.setIcon(material_icon("expand_less", icon_color))
             self._btn_toggle.setText("Collapse")
             self._btn_toggle.setToolTip("Show less detail")
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self._app_settings = load_app_settings()
+        if active_theme() != self._app_settings.theme:
+            set_active_theme(self._app_settings.theme)
+            self._apply_active_theme()
         self._sync_notify_bells_from_settings()
         if self._settings_popup is not None:
             self._sync_tray_display_radios()
+            self._sync_theme_radios()
         if self._refresh_metrics_locked:
             return
         self._refresh_metrics_locked = True
@@ -1034,181 +1102,6 @@ class UsageWidget(QWidget):
             self._opacity_fader.fade_to(widget, _DATA_DIM_OPACITY)
 
 
-_ROOT_STYLESHEET = """
-#usageRoot {
-    background: transparent;
-    color: #f4f4f5;
-    font-family: "Segoe UI";
-    font-size: 12px;
-}
-QLabel {
-    background: transparent;
-    border: none;
-    color: #f4f4f5;
-}
-QLabel#sectionLabel {
-    color: #f2f2f3;
-    font-size: 13px;
-    font-weight: 600;
-}
-QLabel#teamLabel {
-    color: #d4d4d6;
-    font-size: 12px;
-    font-weight: 500;
-}
-QLabel#sectionTitle {
-    color: #f4f4f5;
-    font-size: 14px;
-    font-weight: 650;
-}
-QLabel#amountLabel {
-    color: #f7f7f8;
-    font-size: 16px;
-    font-weight: 700;
-}
-QLabel#cyanPercent {
-    color: #16e7ee;
-    font-size: 15px;
-    font-weight: 700;
-}
-QLabel#greenPercent {
-    color: #7dcea0;
-    font-size: 15px;
-    font-weight: 700;
-}
-QLabel#coralPercent {
-    color: #ee6854;
-    font-size: 15px;
-    font-weight: 700;
-}
-QLabel#onDemandAmount {
-    color: #f7f7f8;
-    font-size: 14px;
-    font-weight: 700;
-}
-QLabel#onDemandPercent {
-    color: #ee6854;
-    font-size: 13px;
-    font-weight: 700;
-}
-QLabel#mutedLabel {
-    color: #c4c4c6;
-    font-size: 12px;
-}
-QLabel#cardTitle {
-    color: #f4f4f5;
-    font-size: 13px;
-    font-weight: 650;
-}
-QLabel#cardFooter {
-    color: #f4f4f5;
-    font-size: 13px;
-    font-weight: 650;
-}
-QLabel#metaLine {
-    color: #c8c8ca;
-    font-size: 11px;
-}
-QLabel#inlineError {
-    color: #fca5a5;
-    font-size: 11px;
-}
-QLineEdit#tokenInput {
-    background-color: #2b2b2d;
-    color: #f4f4f5;
-    border: 1px solid #52545a;
-    border-radius: 8px;
-    padding: 6px 8px;
-    font-size: 12px;
-    selection-background-color: #16e7ee;
-    selection-color: #041316;
-}
-QLabel#loginError {
-    color: #ee6854;
-    font-size: 12px;
-    font-weight: 600;
-}
-QFrame#insetCard {
-    background-color: #38393c;
-    border: 1px solid #38393c;
-    border-radius: 10px;
-}
-QFrame#onDemandCard {
-    background-color: #38393c;
-    border: 1px solid #4a4c50;
-    border-radius: 10px;
-}
-QFrame#insetCard QLabel, QFrame#onDemandCard QLabel {
-    border: none;
-    background: transparent;
-}
-QWidget#sectionRule {
-    background-color: #3e4044;
-    border: none;
-    min-height: 1px;
-    max-height: 1px;
-}
-QPushButton {
-    background-color: #3a3c3e;
-    color: #ececee;
-    border: 1px solid #52545a;
-    border-radius: 8px;
-    padding: 4px 8px;
-    font-size: 11px;
-    min-height: 26px;
-}
-QPushButton:hover {
-    background-color: #45474b;
-}
-QPushButton#refreshButton:disabled[refreshState="loading"] {
-    color: #ececee;
-    background-color: #3a3c3e;
-    border-color: #52545a;
-}
-QPushButton#refreshButton:disabled[refreshState="cooldown"] {
-    color: #7a7a7e;
-    background-color: #2e3032;
-    border-color: #3a3c3e;
-}
-QPushButton#windowChromeButton, QPushButton#windowCloseButton,
-QPushButton#sectionNotifyBell {
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    padding: 2px;
-    min-width: 24px;
-    max-width: 24px;
-    min-height: 22px;
-    max-height: 22px;
-}
-QPushButton#sectionNotifyBell:hover {
-    background-color: #45474b;
-}
-QPushButton#windowChromeButton:hover {
-    background-color: #45474b;
-}
-QPushButton#windowCloseButton:hover {
-    background-color: #5c3330;
-}
-QPushButton#toggleButton {
-    color: #e6d3b0;
-    background-color: #6e5c42;
-    border: 1px solid #8d784f;
-    font-weight: 650;
-    padding: 4px 10px;
-}
-QPushButton#loginButton {
-    color: #041316;
-    background-color: #16e7ee;
-    border: 1px solid #16e7ee;
-    font-weight: 700;
-}
-QPushButton#loginButton:hover {
-    background-color: #5ef3f8;
-}
-"""
-
-
 def _login_failure_text(message: str) -> str:
     lowered = message.lower()
     if "appbound" in lowered or "decrypt" in lowered or "running as admin" in lowered:
@@ -1229,14 +1122,11 @@ def _section_rule() -> QWidget:
     return line
 
 
-def _rotated_icons(icon: QIcon, size: int, steps: int = 12) -> list[QIcon]:
-    base = icon.pixmap(size, size)
-    dpr = base.devicePixelRatio() or 1.0
-    physical = max(1, int(round(size * dpr)))
+def _rotated_icons(name: str, color: str | QColor, size: int, steps: int = 12) -> list[QIcon]:
+    base = material_pixmap(name, color, size=size)
     frames: list[QIcon] = []
     for step in range(steps):
-        canvas = QPixmap(physical, physical)
-        canvas.setDevicePixelRatio(dpr)
+        canvas = QPixmap(size, size)
         canvas.fill(Qt.GlobalColor.transparent)
         painter = QPainter(canvas)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

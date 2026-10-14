@@ -19,6 +19,9 @@ _SETTINGS_FILE_NAME = "settings.json"
 TrayDisplayMode = Literal["total_percent", "personal"]
 DEFAULT_TRAY_DISPLAY_MODE: TrayDisplayMode = "total_percent"
 
+ThemeId = Literal["dark", "light"]
+DEFAULT_THEME: ThemeId = "dark"
+
 
 @dataclass(frozen=True)
 class UsageNotificationState:
@@ -31,6 +34,7 @@ class AppSettings:
     tray_display_mode: TrayDisplayMode = DEFAULT_TRAY_DISPLAY_MODE
     usage_notifications: dict[str, bool] = field(default_factory=dict)
     usage_notification_state: UsageNotificationState = field(default_factory=UsageNotificationState)
+    theme: ThemeId = DEFAULT_THEME
 
     def is_usage_notification_enabled(self, section_id: str) -> bool:
         return bool(self.usage_notifications.get(section_id, False))
@@ -40,6 +44,7 @@ class AppSettings:
             tray_display_mode=mode,
             usage_notifications=dict(self.usage_notifications),
             usage_notification_state=self.usage_notification_state,
+            theme=self.theme,
         )
 
     def with_usage_notification(self, section_id: str, enabled: bool) -> AppSettings:
@@ -49,6 +54,7 @@ class AppSettings:
             tray_display_mode=self.tray_display_mode,
             usage_notifications=merged,
             usage_notification_state=self.usage_notification_state,
+            theme=self.theme,
         )
 
     def with_usage_notification_state(self, state: UsageNotificationState) -> AppSettings:
@@ -56,6 +62,15 @@ class AppSettings:
             tray_display_mode=self.tray_display_mode,
             usage_notifications=dict(self.usage_notifications),
             usage_notification_state=state,
+            theme=self.theme,
+        )
+
+    def with_theme(self, theme: ThemeId) -> AppSettings:
+        return AppSettings(
+            tray_display_mode=self.tray_display_mode,
+            usage_notifications=dict(self.usage_notifications),
+            usage_notification_state=self.usage_notification_state,
+            theme=theme,
         )
 
 
@@ -68,6 +83,12 @@ def _parse_tray_display_mode(raw: object) -> TrayDisplayMode:
     if raw in ("total_percent", "personal"):
         return raw
     return DEFAULT_TRAY_DISPLAY_MODE
+
+
+def _parse_theme(raw: object) -> ThemeId:
+    if raw == "light":
+        return "light"
+    return DEFAULT_THEME
 
 
 def _parse_usage_notifications(raw: object) -> dict[str, bool]:
@@ -113,6 +134,7 @@ def load_app_settings(path: Path | None = None) -> AppSettings:
         tray_display_mode=_parse_tray_display_mode(raw.get("tray_display_mode")),
         usage_notifications=_parse_usage_notifications(raw.get("usage_notifications")),
         usage_notification_state=_parse_usage_notification_state(raw.get("usage_notification_state")),
+        theme=_parse_theme(raw.get("theme")),
     )
 
 
@@ -130,6 +152,8 @@ def save_app_settings(settings: AppSettings, path: Path | None = None) -> None:
     settings_path = path or default_settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, object] = {"tray_display_mode": settings.tray_display_mode}
+    if settings.theme != DEFAULT_THEME:
+        payload["theme"] = settings.theme
     if settings.usage_notifications:
         payload["usage_notifications"] = dict(settings.usage_notifications)
     state = settings.usage_notification_state

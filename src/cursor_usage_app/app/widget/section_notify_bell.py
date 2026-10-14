@@ -5,11 +5,8 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QPushButton
 
-from cursor_usage_app.app.widget import colors
+from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.material_icons import material_icon
-
-_BELL_DIM_COLOR = "#6b6b6e"
-_BELL_ACTIVE_COLOR = colors.AMBER
 
 
 class SectionNotifyBell(QPushButton):
@@ -43,9 +40,10 @@ class SectionNotifyBell(QPushButton):
         self.toggled_enabled.emit(self._section_id, checked)
 
     def _apply_icon(self, enabled: bool) -> None:
+        palette = active_palette()
         if enabled:
-            self.setIcon(material_icon("notifications_active", _BELL_ACTIVE_COLOR))
+            self.setIcon(material_icon("notifications_active", palette.bell_active))
             self.setToolTip("Notifications on (50%, 75%, 90%, 100%)")
             return
-        self.setIcon(material_icon("notifications", _BELL_DIM_COLOR))
+        self.setIcon(material_icon("notifications", palette.bell_dim))
         self.setToolTip("Notify at 50%, 75%, 90%, and 100% usage")
