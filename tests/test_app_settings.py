@@ -1,6 +1,12 @@
 import json
 
-from cursor_usage_app.settings.app_settings import AppSettings, load_app_settings, save_app_settings
+from cursor_usage_app.settings.app_settings import (
+    AppSettings,
+    UsageNotificationState,
+    load_app_settings,
+    mutate_app_settings,
+    save_app_settings,
+)
 
 
 def test_load_missing_file_returns_default(tmp_path) -> None:
@@ -30,6 +36,28 @@ def test_unknown_mode_returns_default(tmp_path) -> None:
     path.write_text('{"tray_display_mode": "unknown"}', encoding="utf-8")
     settings = load_app_settings(path)
     assert settings.tray_display_mode == "total_percent"
+
+
+def test_mutate_app_settings_preserves_notification_state(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    save_app_settings(
+        AppSettings(
+            usage_notifications={"personal": True},
+            usage_notification_state=UsageNotificationState(
+                billing_cycle_end="2026-11-01T00:00:00Z",
+                fired_keys=frozenset({"personal:50", "personal:75"}),
+            ),
+        ),
+        path,
+    )
+    mutate_app_settings(
+        lambda current: current.with_usage_notification(section_id="team", enabled=True),
+        path,
+    )
+    loaded = load_app_settings(path)
+    assert loaded.usage_notifications == {"personal": True, "team": True}
+    assert loaded.usage_notification_state.billing_cycle_end == "2026-11-01T00:00:00Z"
+    assert loaded.usage_notification_state.fired_keys == frozenset({"personal:50", "personal:75"})
 
 
 def test_with_tray_display_mode_preserves_notifications() -> None:

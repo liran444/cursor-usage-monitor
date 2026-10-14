@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -113,6 +114,16 @@ def load_app_settings(path: Path | None = None) -> AppSettings:
         usage_notifications=_parse_usage_notifications(raw.get("usage_notifications")),
         usage_notification_state=_parse_usage_notification_state(raw.get("usage_notification_state")),
     )
+
+
+def mutate_app_settings(
+    mutator: Callable[[AppSettings], AppSettings],
+    path: Path | None = None,
+) -> AppSettings:
+    current = load_app_settings(path)
+    updated = mutator(current)
+    save_app_settings(updated, path)
+    return updated
 
 
 def save_app_settings(settings: AppSettings, path: Path | None = None) -> None:

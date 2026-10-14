@@ -8,7 +8,7 @@ from cursor_usage_app.domain.models import (
     UsagePool,
     UsageSnapshot,
 )
-from cursor_usage_app.settings.app_settings import AppSettings, save_app_settings
+from cursor_usage_app.settings.app_settings import AppSettings, UsageNotificationState, save_app_settings
 
 
 def _envelope(percent: float) -> CacheEnvelopeOk:
@@ -53,3 +53,22 @@ def test_notifier_fires_crossed_thresholds(tmp_path) -> None:
     notifier.process_envelope(_envelope(76.0), show)
     assert show.call_count == 1
     assert "75%" in show.call_args[0][1]
+    assert "(" not in show.call_args[0][1]
+
+
+def test_notifier_does_not_renotify_after_state_persisted(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    save_app_settings(
+        AppSettings(
+            usage_notifications={"personal": True},
+            usage_notification_state=UsageNotificationState(
+                billing_cycle_end="2026-11-01T00:00:00Z",
+                fired_keys=frozenset({"personal:50", "personal:75"}),
+            ),
+        ),
+        path,
+    )
+    notifier = UsageNotifier(settings_path=path)
+    show = MagicMock()
+    notifier.process_envelope(_envelope(55.0), show)
+    show.assert_not_called()

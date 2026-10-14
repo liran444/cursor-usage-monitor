@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from cursor_usage_app.app.widget.formatting import format_pool_percent
 from cursor_usage_app.domain.models import UsageSnapshot
+from cursor_usage_app.settings.app_settings import UsageNotificationState
 
 USAGE_NOTIFICATION_THRESHOLDS: tuple[int, ...] = (50, 75, 90, 100)
 
@@ -44,6 +47,38 @@ def notification_fired_key(section_id: str, threshold: int) -> str:
     return f"{section_id}:{threshold}"
 
 
+def thresholds_already_reached(percent: float | None) -> list[int]:
+    """Return configured thresholds at or below current usage (in ascending order)."""
+    if percent is None:
+        return []
+    return [threshold for threshold in sorted(USAGE_NOTIFICATION_THRESHOLDS) if percent >= threshold]
+
+
+def notification_state_for_cycle(
+    state: UsageNotificationState,
+    billing_cycle_end: str | None,
+) -> UsageNotificationState:
+    if state.billing_cycle_end == billing_cycle_end:
+        return state
+    return UsageNotificationState(billing_cycle_end=billing_cycle_end, fired_keys=frozenset())
+
+
+def acknowledge_thresholds(
+    state: UsageNotificationState,
+    section_id: str,
+    thresholds: Iterable[int],
+) -> UsageNotificationState:
+    new_keys = set(state.fired_keys)
+    for threshold in thresholds:
+        new_keys.add(notification_fired_key(section_id, threshold))
+    if new_keys == state.fired_keys:
+        return state
+    return UsageNotificationState(
+        billing_cycle_end=state.billing_cycle_end,
+        fired_keys=frozenset(new_keys),
+    )
+
+
 def thresholds_to_notify(
     percent: float | None,
     section_id: str,
@@ -60,7 +95,6 @@ def thresholds_to_notify(
     ]
 
 
-def format_notification_message(section_id: str, threshold: int, percent: float | None) -> str:
+def format_notification_message(section_id: str, threshold: int) -> str:
     label = SECTION_DISPLAY_NAMES.get(section_id, section_id)
-    pct_text = f"{round(percent)}%" if percent is not None else f"{threshold}%"
-    return f"{label} usage reached {threshold}% ({pct_text})."
+    return f"{label} usage reached {threshold}%."

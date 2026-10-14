@@ -6,6 +6,9 @@ from cursor_usage_app.domain.models import (
 )
 from cursor_usage_app.settings.app_settings import AppSettings, UsageNotificationState, load_app_settings, save_app_settings
 from cursor_usage_app.usage_notifications import (
+    acknowledge_thresholds,
+    format_notification_message,
+    thresholds_already_reached,
     thresholds_to_notify,
     usage_percent_for_section,
 )
@@ -47,6 +50,23 @@ def test_thresholds_to_notify_skips_already_fired() -> None:
     fired = frozenset({"personal:50"})
     assert thresholds_to_notify(55.0, "personal", fired) == []
     assert thresholds_to_notify(76.0, "personal", fired) == [75]
+
+
+def test_format_notification_message_has_no_current_percent_parenthetical() -> None:
+    body = format_notification_message("personal", 50)
+    assert body == "Personal usage reached 50%."
+    assert "(" not in body
+
+
+def test_thresholds_already_reached_at_eighty_percent() -> None:
+    assert thresholds_already_reached(80.0) == [50, 75]
+
+
+def test_acknowledge_on_enable_leaves_only_higher_thresholds_to_notify() -> None:
+    state = UsageNotificationState()
+    state = acknowledge_thresholds(state, "personal", thresholds_already_reached(80.0))
+    assert thresholds_to_notify(80.0, "personal", state.fired_keys) == []
+    assert thresholds_to_notify(91.0, "personal", state.fired_keys) == [90]
 
 
 def test_notification_settings_round_trip(tmp_path) -> None:

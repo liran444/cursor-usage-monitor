@@ -44,9 +44,15 @@ from cursor_usage_app.auth.browser_import import (
 )
 from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.auth.token_normalize import TokenNormalizeError
-from cursor_usage_app.cache.usage_cache import CacheEnvelope, parse_cache_envelope
+from cursor_usage_app.cache.usage_cache import CacheEnvelope, CacheEnvelopeOk, parse_cache_envelope
 from cursor_usage_app.domain.models import UsageSnapshot
-from cursor_usage_app.settings.app_settings import load_app_settings, save_app_settings
+from cursor_usage_app.settings.app_settings import load_app_settings, mutate_app_settings
+from cursor_usage_app.usage_notifications import (
+    acknowledge_thresholds,
+    notification_state_for_cycle,
+    thresholds_already_reached,
+    usage_percent_for_section,
+)
 
 _WIDGET_WIDTH = 295
 _FULL_HEIGHT = 620
@@ -531,8 +537,27 @@ class UsageWidget(QWidget):
                 bell.set_notification_enabled(enabled)
 
     def _on_notify_bell_toggled(self, section_id: str, enabled: bool) -> None:
-        self._app_settings = self._app_settings.with_usage_notification(section_id, enabled)
-        save_app_settings(self._app_settings)
+        def mutator(current):
+            updated = current.with_usage_notification(section_id, enabled)
+            if not enabled:
+                return updated
+            envelope = load_cache(self._cache_path)
+            if not isinstance(envelope, CacheEnvelopeOk):
+                return updated
+            snapshot = envelope.data
+            state = notification_state_for_cycle(
+                updated.usage_notification_state,
+                snapshot.billing_cycle_end,
+            )
+            percent = usage_percent_for_section(snapshot, section_id)
+            state = acknowledge_thresholds(
+                state,
+                section_id,
+                thresholds_already_reached(percent),
+            )
+            return updated.with_usage_notification_state(state)
+
+        self._app_settings = mutate_app_settings(mutator)
         self._sync_notify_bells_from_settings()
 
     def _on_fetch_finished(self, _exit_code: int) -> None:
@@ -646,8 +671,9 @@ class UsageWidget(QWidget):
         mode = "personal" if button is self._radio_personal else "total_percent"
         if self._app_settings.tray_display_mode == mode:
             return
-        self._app_settings = self._app_settings.with_tray_display_mode(mode)
-        save_app_settings(self._app_settings)
+        self._app_settings = mutate_app_settings(
+            lambda current: current.with_tray_display_mode(mode),
+        )
         self.tray_settings_changed.emit()
 
     def show_token_editor(self) -> None:
