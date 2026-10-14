@@ -37,10 +37,12 @@ _POPUP_STYLESHEET = """
     color: #ececee;
     font-size: 12px;
     spacing: 6px;
+    padding-left: 4px;
 }
 #traySettingsPopup QRadioButton::indicator {
     width: 14px;
     height: 14px;
+    margin-left: 2px;
 }
 """
 
