@@ -18,6 +18,15 @@ def test_tooltip_ok_includes_plan_percents() -> None:
     assert "Last fetch:" in text
 
 
+def test_tooltip_personal_mode_shows_personal_usage() -> None:
+    snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_personal_only.json"))
+    envelope = CacheEnvelopeOk(ok=True, data=snapshot, fetched_at="2026-01-01T12:00:00+00:00")
+    text = build_tray_tooltip(envelope, mode="personal")
+    assert "Personal: $12.00 / $20.00 (60%)" in text
+    assert "TOTAL:" not in text
+    assert "Last fetch:" in text
+
+
 def test_tooltip_auth_error_uses_exclamation() -> None:
     envelope = CacheEnvelopeError(
         ok=False,

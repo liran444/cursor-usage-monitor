@@ -18,6 +18,7 @@ from cursor_usage_app.app.widget.usage_window import UsageWindow
 from cursor_usage_app.auth.browser_import import BrowserImportError, import_session_token_from_browsers
 from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.cache.usage_cache import default_cache_path
+from cursor_usage_app.settings.app_settings import load_app_settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class TrayController(QObject):
         super().__init__()
         self._store = store or SessionStore()
         self._cache_path = cache_path or default_cache_path()
+        self._settings = load_app_settings()
         self._window = UsageWindow(
             cache_path=self._cache_path,
             store=self._store,
@@ -46,6 +48,7 @@ class TrayController(QObject):
         self._fetch_runner = None
 
         self._silent_import_finished.connect(self.refresh)
+        self._window.widget().tray_settings_changed.connect(self._on_tray_settings_changed)
 
         self._tray = QSystemTrayIcon(self)
         self._tray.setToolTip("Cursor Usage")
@@ -148,6 +151,8 @@ class TrayController(QObject):
             self._window.position_near_cursor()
             self._widget_positioned = True
         self._window.widget().reload_from_cache()
+        self._settings = load_app_settings()
+        self._apply_cache_to_tray(load_cache(self._cache_path))
         self._window.show()
         self._window.raise_()
         self._window.activateWindow()
@@ -165,10 +170,15 @@ class TrayController(QObject):
         self._apply_cache_to_tray(envelope)
         self._window.widget().reload_from_cache()
 
+    def _on_tray_settings_changed(self) -> None:
+        self._settings = load_app_settings()
+        self._apply_cache_to_tray(load_cache(self._cache_path))
+
     def _apply_cache_to_tray(self, envelope) -> None:
-        display = tray_ring_display_from_envelope(envelope)
+        mode = self._settings.tray_display_mode
+        display = tray_ring_display_from_envelope(envelope, mode=mode)
         self._tray.setIcon(render_tray_ring_icon(display))
-        self._tray.setToolTip(build_tray_tooltip(envelope))
+        self._tray.setToolTip(build_tray_tooltip(envelope, mode=mode))
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -186,6 +196,8 @@ class TrayController(QObject):
             self._window.position_near_cursor()
             self._widget_positioned = True
         self._window.widget().reload_from_cache()
+        self._settings = load_app_settings()
+        self._apply_cache_to_tray(load_cache(self._cache_path))
         self._window.show()
         self._window.raise_()
         self._window.activateWindow()

@@ -26,7 +26,16 @@ def test_tray_display_ok_shows_integer_percent() -> None:
     display = tray_ring_display_from_envelope(envelope)
     assert display.center_kind == "percent"
     assert display.center_text == "42"
-    assert display.total_percent == 42.0
+    assert display.ring_percent == 42.0
+
+
+def test_tray_display_personal_mode_uses_pool_percent() -> None:
+    snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_personal_only.json"))
+    envelope = CacheEnvelopeOk(ok=True, data=snapshot, fetched_at="2026-01-01T00:00:00+00:00")
+    display = tray_ring_display_from_envelope(envelope, mode="personal")
+    assert display.center_kind == "percent"
+    assert display.center_text == "60"
+    assert display.ring_percent == 60.0
 
 
 def test_tray_display_auth_shows_exclamation() -> None:

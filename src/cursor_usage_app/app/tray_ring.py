@@ -9,7 +9,9 @@ from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPen, QPixmap
 
 from cursor_usage_app.app.widget import colors
+from cursor_usage_app.app.widget.formatting import format_pool_percent
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, CacheEnvelopeError, CacheEnvelopeOk
+from cursor_usage_app.settings.app_settings import DEFAULT_TRAY_DISPLAY_MODE, TrayDisplayMode
 
 _ICON_SIZE = 64
 _RING_WIDTH = 6.0
@@ -22,7 +24,7 @@ class TrayRingDisplay:
     """What to draw in the tray ring."""
 
     center_kind: TrayCenterKind
-    total_percent: float | None
+    ring_percent: float | None
     center_text: str
 
 
@@ -36,27 +38,41 @@ def ring_arc_color_for_percent(percent: float) -> QColor:
     return colors.CORAL
 
 
-def tray_ring_display_from_envelope(envelope: CacheEnvelope | None) -> TrayRingDisplay:
+def tray_ring_display_from_envelope(
+    envelope: CacheEnvelope | None,
+    mode: TrayDisplayMode = DEFAULT_TRAY_DISPLAY_MODE,
+) -> TrayRingDisplay:
     if envelope is None:
-        return TrayRingDisplay(center_kind="empty", total_percent=None, center_text="—")
+        return TrayRingDisplay(center_kind="empty", ring_percent=None, center_text="—")
 
     if isinstance(envelope, CacheEnvelopeOk):
+        if mode == "personal":
+            personal = envelope.data.personal
+            personal_pct = format_pool_percent(personal.used_usd, personal.limit_usd)
+            if personal_pct is None:
+                return TrayRingDisplay(center_kind="other", ring_percent=None, center_text="—")
+            return TrayRingDisplay(
+                center_kind="percent",
+                ring_percent=personal_pct,
+                center_text=f"{round(personal_pct)}",
+            )
+
         total = envelope.data.plan_percents.total_percent_used
         if total is None:
-            return TrayRingDisplay(center_kind="other", total_percent=None, center_text="—")
+            return TrayRingDisplay(center_kind="other", ring_percent=None, center_text="—")
         return TrayRingDisplay(
             center_kind="percent",
-            total_percent=total,
+            ring_percent=total,
             center_text=f"{round(total)}",
         )
 
     if isinstance(envelope, CacheEnvelopeError):
         code = envelope.error.code
         if code in ("not_authenticated", "invalid_token"):
-            return TrayRingDisplay(center_kind="auth", total_percent=None, center_text="!")
-        return TrayRingDisplay(center_kind="other", total_percent=None, center_text="—")
+            return TrayRingDisplay(center_kind="auth", ring_percent=None, center_text="!")
+        return TrayRingDisplay(center_kind="other", ring_percent=None, center_text="—")
 
-    return TrayRingDisplay(center_kind="other", total_percent=None, center_text="—")
+    return TrayRingDisplay(center_kind="other", ring_percent=None, center_text="—")
 
 
 def render_tray_ring_icon(display: TrayRingDisplay) -> QIcon:
@@ -74,8 +90,8 @@ def render_tray_ring_icon(display: TrayRingDisplay) -> QIcon:
     painter.setPen(pen_track)
     painter.drawArc(rect, 0, 360 * 16)
 
-    if display.center_kind == "percent" and display.total_percent is not None:
-        span = min(100.0, max(0.0, display.total_percent))
+    if display.center_kind == "percent" and display.ring_percent is not None:
+        span = min(100.0, max(0.0, display.ring_percent))
         if span > 0.0:
             arc_color = ring_arc_color_for_percent(span)
             pen_arc = QPen(arc_color, _RING_WIDTH)

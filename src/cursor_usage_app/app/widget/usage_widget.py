@@ -29,6 +29,7 @@ from cursor_usage_app.app.widget.formatting import (
 from cursor_usage_app.app.widget.gauge_widget import DonutGauge, MiniTotalGauge, SegmentedTotalGauge
 from cursor_usage_app.app.widget.material_icons import material_icon, material_pixmap
 from cursor_usage_app.app.widget.progress_bar import HorizontalBar
+from cursor_usage_app.app.widget.tray_settings_popup import TraySettingsPopup
 from cursor_usage_app.app.widget.view_model import (
     WidgetViewModel,
     shows_browser_login,
@@ -44,6 +45,7 @@ from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.auth.token_normalize import TokenNormalizeError
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, parse_cache_envelope
 from cursor_usage_app.domain.models import UsageSnapshot
+from cursor_usage_app.settings.app_settings import AppSettings, load_app_settings, save_app_settings
 
 _WIDGET_WIDTH = 295
 _FULL_HEIGHT = 620
@@ -60,6 +62,7 @@ class UsageWidget(QWidget):
 
     hide_requested = Signal()
     compact_changed = Signal(bool)
+    tray_settings_changed = Signal()
     _login_imported = Signal(str)
     _login_import_failed = Signal(str)
 
@@ -95,6 +98,9 @@ class UsageWidget(QWidget):
         self._login_imported.connect(self._on_import_success)
         self._login_import_failed.connect(self._on_import_error)
         self._refresh_metrics_locked = False
+        self._app_settings = load_app_settings()
+        self._settings_popup: TraySettingsPopup | None = None
+        self._suppress_settings_open = False
 
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -174,6 +180,11 @@ class UsageWidget(QWidget):
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(8)
 
+        self._btn_settings = _icon_tool_button(
+            material_icon("settings", "#c4c4c6"),
+            "Settings",
+            object_name="windowChromeButton",
+        )
         self._btn_quit = _icon_tool_button(
             material_icon("close", "#e7c4b8"),
             "Hide",
@@ -183,6 +194,7 @@ class UsageWidget(QWidget):
         chrome_row.setContentsMargins(0, 0, 0, 0)
         chrome_row.setSpacing(2)
         chrome_row.addStretch()
+        chrome_row.addWidget(self._btn_settings)
         chrome_row.addWidget(self._btn_quit)
         root.addLayout(chrome_row)
 
@@ -449,6 +461,7 @@ class UsageWidget(QWidget):
         self._btn_token.clicked.connect(self.show_token_editor)
         self._btn_toggle.clicked.connect(self.toggle_compact)
         self._btn_dashboard.clicked.connect(self._open_dashboard)
+        self._btn_settings.clicked.connect(self._toggle_settings_popup)
         self._btn_quit.clicked.connect(self.hide_requested.emit)
 
         # Metadata
@@ -475,7 +488,68 @@ class UsageWidget(QWidget):
     def _on_fetch_finished(self, _exit_code: int) -> None:
         self.reload_from_cache()
 
+    def _ensure_settings_popup(self) -> TraySettingsPopup:
+        if self._settings_popup is not None:
+            return self._settings_popup
+        host = self.window() or self
+        popup = TraySettingsPopup(host, anchor=self._btn_settings)
+        popup.dismissed_via_anchor.connect(self._on_settings_dismissed_via_anchor)
+        popup.button_group.buttonToggled.connect(self._on_tray_display_button_toggled)
+        self._settings_popup = popup
+        self._radio_total = popup.radio_total
+        self._radio_personal = popup.radio_personal
+        self._tray_display_group = popup.button_group
+        self._sync_tray_display_radios()
+        return popup
+
+    def _on_settings_dismissed_via_anchor(self) -> None:
+        """Qt.Popup closes before the gear button's clicked signal; swallow the reopen."""
+        self._suppress_settings_open = True
+        QTimer.singleShot(300, self._release_settings_suppress)
+
+    def _release_settings_suppress(self) -> None:
+        self._suppress_settings_open = False
+
+    def _toggle_settings_popup(self) -> None:
+        if self._suppress_settings_open:
+            self._suppress_settings_open = False
+            return
+        popup = self._ensure_settings_popup()
+        if popup.isVisible():
+            popup.hide()
+            return
+        self._hide_token_editor()
+        self._app_settings = load_app_settings()
+        self._sync_tray_display_radios()
+        popup.position_below(self._btn_settings)
+        popup.show()
+
+    def _hide_settings_popup(self) -> None:
+        if self._settings_popup is not None:
+            self._settings_popup.hide()
+
+    def _sync_tray_display_radios(self) -> None:
+        if self._settings_popup is None:
+            return
+        self._tray_display_group.blockSignals(True)
+        if self._app_settings.tray_display_mode == "personal":
+            self._radio_personal.setChecked(True)
+        else:
+            self._radio_total.setChecked(True)
+        self._tray_display_group.blockSignals(False)
+
+    def _on_tray_display_button_toggled(self, button, checked: bool) -> None:
+        if not checked:
+            return
+        mode = "personal" if button is self._radio_personal else "total_percent"
+        if self._app_settings.tray_display_mode == mode:
+            return
+        self._app_settings = AppSettings(tray_display_mode=mode)
+        save_app_settings(self._app_settings)
+        self.tray_settings_changed.emit()
+
     def show_token_editor(self) -> None:
+        self._hide_settings_popup()
         self._token_error.hide()
         self._token_error.setText("")
         self._token_panel.show()
@@ -656,7 +730,10 @@ class UsageWidget(QWidget):
         self._summary_block.setVisible(show_data and not compact)
         self._metadata_block.setVisible(show_data and not compact)
         self._action_row.setVisible(not login)
+        self._btn_settings.setVisible(not login)
         self._btn_token.setVisible(login)
+        if login or empty_loading:
+            self._hide_settings_popup()
         self._btn_dashboard.setVisible(not login and not compact)
         self._sync_section_rules()
 
@@ -707,7 +784,7 @@ class UsageWidget(QWidget):
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802
         if (
-            self._login_waiting
+            getattr(self, "_login_waiting", False)
             and event.type() == QEvent.Type.WindowActivate
             and watched is self.window()
         ):
@@ -809,6 +886,9 @@ class UsageWidget(QWidget):
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
+        self._app_settings = load_app_settings()
+        if self._settings_popup is not None:
+            self._sync_tray_display_radios()
         if self._refresh_metrics_locked:
             return
         self._refresh_metrics_locked = True
