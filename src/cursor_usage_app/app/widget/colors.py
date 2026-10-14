@@ -29,6 +29,7 @@ class Palette:
     team_label: str
     amount: str
     cyan: str
+    api_gauge: str
     violet: str
     green: str
     coral: str
@@ -85,6 +86,7 @@ DARK = Palette(
     team_label="#d4d4d6",
     amount="#f7f7f8",
     cyan="#16e7ee",
+    api_gauge="#6b9eff",
     violet="#a855f7",
     green="#7dcea0",
     coral="#ee6854",
@@ -141,6 +143,7 @@ LIGHT = Palette(
     team_label="#3a3d44",
     amount="#16181c",
     cyan="#0e7490",
+    api_gauge="#2563eb",
     violet="#7c3aed",
     green="#18794e",
     coral="#c0362c",

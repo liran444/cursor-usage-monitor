@@ -49,7 +49,7 @@ class DonutGauge(QWidget):
 
 
 class SegmentedTotalGauge(QWidget):
-    """TOTAL ring. API segment is cyan; the rest of the total arc is violet."""
+    """TOTAL ring. API segment matches the API gauge; the remainder is violet (AUTO)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -77,12 +77,14 @@ class SegmentedTotalGauge(QWidget):
 
         palette = active_palette()
         start_deg = 90.0
-        if segments.degraded_single_color or segments.auto_span <= 0.0:
+        if segments.degraded_single_color:
             _draw_arc(painter, rect, start_deg, segments.total_span, QColor(palette.cyan), _RING_WIDTH)
+        elif segments.auto_span <= 0.0:
+            _draw_arc(painter, rect, start_deg, segments.total_span, QColor(palette.api_gauge), _RING_WIDTH)
         elif segments.api_span <= 0.0:
             _draw_arc(painter, rect, start_deg, segments.total_span, QColor(palette.violet), _RING_WIDTH)
         else:
-            _draw_arc(painter, rect, start_deg, segments.api_span, QColor(palette.cyan), _RING_WIDTH)
+            _draw_arc(painter, rect, start_deg, segments.api_span, QColor(palette.api_gauge), _RING_WIDTH)
             auto_start = start_deg - (segments.api_span * 360.0 / 100.0)
             _draw_arc(painter, rect, auto_start, segments.auto_span, QColor(palette.violet), _RING_WIDTH)
 
@@ -117,7 +119,7 @@ class MiniTotalGauge(QWidget):
             return
         palette = active_palette()
         single_auto = (not segments.degraded_single_color) and (segments.api_span <= 0.0)
-        color = QColor(palette.violet if single_auto else palette.cyan)
+        color = QColor(palette.violet if single_auto else palette.api_gauge)
         _draw_arc(painter, rect, 90.0, segments.total_span, color, width)
 
 
