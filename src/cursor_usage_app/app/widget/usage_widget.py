@@ -59,8 +59,11 @@ from cursor_usage_app.usage_notifications import (
 )
 
 _WIDGET_WIDTH = 303
+_LOGIN_WIDGET_WIDTH = 328
 _FULL_HEIGHT = 620
 _COMPACT_HEIGHT = 230
+_LOGIN_MIN_HEIGHT = 300
+_LOGIN_WAITING_MIN_HEIGHT = 340
 _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
 _LOGIN_URL = "https://cursor.com/login"
 _LOGIN_POLL_MS = 2000
@@ -69,7 +72,7 @@ _MANUAL_REFRESH_COOLDOWN_MS = 5000
 _REFRESH_DIM_OPACITY = 0.42
 _DATA_DIM_OPACITY = 0.35
 _OPACITY_FADE_MS = 300
-_SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
+_BUSY_SPINNER_INTERVAL_MS = 70
 _CARD_SECTION_INSET_MARGINS = (8, 10, 8, 10)
 _SECTION_INSET_MARGINS = (8, 2, 8, 2)
 
@@ -104,14 +107,14 @@ class UsageWidget(QWidget):
         self._login_timer.setInterval(_LOGIN_POLL_MS)
         self._login_timer.timeout.connect(self._attempt_browser_import)
         self._spinner_index = 0
-        self._spinner_timer = QTimer(self)
-        self._spinner_timer.setInterval(120)
-        self._spinner_timer.timeout.connect(self._advance_login_spinner)
+        self._login_spinner_timer = QTimer(self)
+        self._login_spinner_timer.setInterval(_BUSY_SPINNER_INTERVAL_MS)
+        self._login_spinner_timer.timeout.connect(self._advance_login_spinner)
         self._refresh_busy = False
         self._content_busy = False
         self._busy_index = 0
         self._busy_timer = QTimer(self)
-        self._busy_timer.setInterval(70)
+        self._busy_timer.setInterval(_BUSY_SPINNER_INTERVAL_MS)
         self._busy_timer.timeout.connect(self._advance_busy_spinner)
         self._login_imported.connect(self._on_import_success)
         self._login_import_failed.connect(self._on_import_error)
@@ -120,6 +123,7 @@ class UsageWidget(QWidget):
         apply_theme_preference(self._app_settings.theme)
         self._refresh_frames: list[QIcon] = []
         self._content_frames: list[QIcon] = []
+        self._login_spinner_frames: list[QIcon] = []
         self._settings_popup: TraySettingsPopup | None = None
         self._suppress_settings_open = False
         self._manual_refresh_cooldown = False
@@ -201,13 +205,28 @@ class UsageWidget(QWidget):
         webbrowser.open(_DASHBOARD_URL)
         self.hide_requested.emit()
 
+    def preferred_width(self) -> int:
+        if self._needs_browser_login():
+            return _LOGIN_WIDGET_WIDTH
+        return _WIDGET_WIDTH
+
     def preferred_height(self) -> int:
         layout = self.layout()
         if layout is None:
             return _COMPACT_HEIGHT if self._compact else _FULL_HEIGHT
         layout.invalidate()
         layout.activate()
-        return layout.sizeHint().height()
+        height = layout.sizeHint().height()
+        if self._needs_browser_login():
+            height = max(height, _LOGIN_MIN_HEIGHT)
+            if self._login_waiting or self._login_status.isVisible() or self._login_error.isVisible():
+                height = max(height, _LOGIN_WAITING_MIN_HEIGHT)
+            body_width = self.preferred_width() - 48
+            if body_width > 0:
+                wrapped = self._login_body.heightForWidth(body_width)
+                if wrapped > 0:
+                    height = max(height, wrapped + 200)
+        return height
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -753,12 +772,15 @@ class UsageWidget(QWidget):
         self._btn_minimize.setIcon(material_icon("minimize", palette.chrome_icon))
         self._btn_quit.setIcon(material_icon("close", palette.close_icon))
         self._refresh_frames = _rotated_icons("refresh", palette.action_icon, 18)
-        self._content_frames = _rotated_icons("progress_activity", palette.cyan, 28)
+        self._content_frames = _rotated_icons("refresh", palette.cyan, 28)
+        self._login_spinner_frames = _rotated_icons("refresh", palette.login_text, 18)
         if self._refresh_busy or self._content_busy:
             self._paint_busy_frame()
         else:
             self._btn_refresh.setIcon(self._refresh_frames[0])
             self._loading_icon.setPixmap(self._content_frames[0].pixmap(28, 28))
+        if self._login_spinner_timer.isActive():
+            self._paint_login_spinner_frame()
         self._btn_dashboard.setIcon(material_icon("open_in_new", palette.action_icon))
         self._update_toggle_button()
         self._personal_icon.setPixmap(material_pixmap("person", palette.cyan, size=16))
@@ -943,6 +965,8 @@ class UsageWidget(QWidget):
         show_data = not login and not empty_loading
         self._loading_card.setVisible(empty_loading)
         self._login_card.setVisible(login)
+        if login:
+            self._resize_to_mode()
         self._personal_card.setVisible(show_data)
         self._compact_total_row.setVisible(compact and show_data)
         self._team_block.setVisible(show_data and not compact and self._view_model.show_team_row)
@@ -1083,16 +1107,27 @@ class UsageWidget(QWidget):
         if active:
             self._spinner_index = 0
             self._btn_login.setEnabled(False)
-            self._btn_login.setText(_SPINNER_FRAMES[0])
-            self._spinner_timer.start()
+            self._btn_login.setText("")
+            self._btn_login.setIconSize(QSize(18, 18))
+            self._paint_login_spinner_frame()
+            self._login_spinner_timer.start()
             return
-        self._spinner_timer.stop()
+        self._login_spinner_timer.stop()
         self._btn_login.setEnabled(True)
         self._btn_login.setText("Log in to Cursor")
+        self._btn_login.setIcon(QIcon())
 
     def _advance_login_spinner(self) -> None:
-        self._spinner_index = (self._spinner_index + 1) % len(_SPINNER_FRAMES)
-        self._btn_login.setText(_SPINNER_FRAMES[self._spinner_index])
+        if not self._login_spinner_frames:
+            return
+        self._spinner_index = (self._spinner_index + 1) % len(self._login_spinner_frames)
+        self._paint_login_spinner_frame()
+
+    def _paint_login_spinner_frame(self) -> None:
+        if not self._login_spinner_frames:
+            return
+        icon = self._login_spinner_frames[self._spinner_index % len(self._login_spinner_frames)]
+        self._btn_login.setIcon(icon)
 
     def _update_toggle_button(self) -> None:
         icon_color = active_palette().toggle_text
@@ -1125,6 +1160,7 @@ class UsageWidget(QWidget):
         self._resize_to_mode()
 
     def _resize_to_mode(self) -> None:
+        self.setFixedWidth(self.preferred_width())
         self.setFixedHeight(self.preferred_height())
         window = self.window()
         if window is not None and hasattr(window, "resize_for_content"):

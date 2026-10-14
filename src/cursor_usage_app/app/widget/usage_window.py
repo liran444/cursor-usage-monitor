@@ -63,8 +63,9 @@ class UsageWindow(QWidget):
         return self._card
 
     def resize_for_content(self) -> None:
+        w = self._card.preferred_width() + 4
         h = self._card.preferred_height() + 4
-        self.setFixedSize(_WIDGET_WIDTH + 4, h)
+        self.setFixedSize(w, h)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -78,7 +79,7 @@ class UsageWindow(QWidget):
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._card.move(2, 2)
-        self._card.setFixedWidth(_WIDGET_WIDTH)
+        self._card.setFixedWidth(self._card.preferred_width())
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
         if event.key() == Qt.Key.Key_Escape:
