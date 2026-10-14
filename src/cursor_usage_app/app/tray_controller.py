@@ -22,7 +22,7 @@ from cursor_usage_app.settings.app_settings import load_app_settings
 
 _LOGGER = logging.getLogger(__name__)
 
-POLL_INTERVAL_MS = 15 * 60 * 1000
+POLL_INTERVAL_MS = 60 * 1000
 _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
 
 

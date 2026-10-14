@@ -18,7 +18,7 @@ def qapp():
 
 
 def test_poll_interval_default_is_fifteen_minutes() -> None:
-    assert POLL_INTERVAL_MS == 15 * 60 * 1000
+    assert POLL_INTERVAL_MS == 60 * 1000
 
 
 def test_first_launch_attempts_import_when_store_empty(

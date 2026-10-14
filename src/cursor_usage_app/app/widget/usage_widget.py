@@ -54,6 +54,8 @@ _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
 _LOGIN_URL = "https://cursor.com/login"
 _LOGIN_POLL_MS = 2000
 _LOGIN_WAIT_MS = 120_000
+_MANUAL_REFRESH_COOLDOWN_MS = 5000
+_REFRESH_DIM_OPACITY = 0.42
 _SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
 
 
@@ -101,6 +103,10 @@ class UsageWidget(QWidget):
         self._app_settings = load_app_settings()
         self._settings_popup: TraySettingsPopup | None = None
         self._suppress_settings_open = False
+        self._manual_refresh_cooldown = False
+        self._refresh_cooldown_timer = QTimer(self)
+        self._refresh_cooldown_timer.setSingleShot(True)
+        self._refresh_cooldown_timer.timeout.connect(self._end_manual_refresh_cooldown)
 
         self.setObjectName("usageRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -150,6 +156,13 @@ class UsageWidget(QWidget):
     def apply_fixture_envelope_dict(self, raw: dict) -> None:
         envelope = parse_cache_envelope(raw)
         self.apply_envelope(envelope)
+
+    def _on_manual_refresh_clicked(self) -> None:
+        if not self._btn_refresh.isEnabled():
+            return
+        self._manual_refresh_cooldown = True
+        self._set_refresh_button_state("loading")
+        self.refresh()
 
     def refresh(self) -> None:
         if self._view_model.phase == "loading":
@@ -437,6 +450,8 @@ class UsageWidget(QWidget):
         self._btn_toggle.setToolTip("Show less detail")
         self._refresh_frames = _rotated_icons(material_icon("refresh", "#d1d5db"), 18)
         self._btn_refresh = _pill_button("Refresh", self._refresh_frames[0])
+        self._btn_refresh.setObjectName("refreshButton")
+        self._btn_refresh.setProperty("refreshState", "idle")
         self._btn_refresh.setIconSize(QSize(18, 18))
         self._content_frames = _rotated_icons(material_icon("progress_activity", colors.CYAN), 28)
         self._loading_icon.setPixmap(self._content_frames[0].pixmap(28, 28))
@@ -457,7 +472,7 @@ class UsageWidget(QWidget):
         self._rule_before_metadata = _section_rule()
         root.addWidget(self._rule_before_metadata)
 
-        self._btn_refresh.clicked.connect(self.refresh)
+        self._btn_refresh.clicked.connect(self._on_manual_refresh_clicked)
         self._btn_token.clicked.connect(self.show_token_editor)
         self._btn_toggle.clicked.connect(self.toggle_compact)
         self._btn_dashboard.clicked.connect(self._open_dashboard)
@@ -487,6 +502,46 @@ class UsageWidget(QWidget):
 
     def _on_fetch_finished(self, _exit_code: int) -> None:
         self.reload_from_cache()
+        if self._manual_refresh_cooldown:
+            self._set_refresh_button_state("cooldown")
+            self._refresh_cooldown_timer.start(_MANUAL_REFRESH_COOLDOWN_MS)
+
+    def _end_manual_refresh_cooldown(self) -> None:
+        self._manual_refresh_cooldown = False
+        self._set_refresh_button_state("idle")
+
+    def _set_refresh_button_state(self, state: str) -> None:
+        """idle: clickable; loading: fetching (full brightness); cooldown: post-fetch wait (dimmed)."""
+        button = self._btn_refresh
+        if state == "idle":
+            self._apply_refresh_dim(False)
+            button.setEnabled(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+        elif state == "loading":
+            self._apply_refresh_dim(False)
+            button.setEnabled(False)
+            button.setCursor(Qt.CursorShape.ArrowCursor)
+        elif state == "cooldown":
+            self._apply_refresh_dim(True)
+            button.setEnabled(False)
+            button.setCursor(Qt.CursorShape.ArrowCursor)
+        else:
+            return
+        button.setProperty("refreshState", state)
+        style = button.style()
+        style.unpolish(button)
+        style.polish(button)
+        button.update()
+
+    def _apply_refresh_dim(self, dimmed: bool) -> None:
+        if not dimmed:
+            self._btn_refresh.setGraphicsEffect(None)
+            return
+        effect = self._btn_refresh.graphicsEffect()
+        if not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(self._btn_refresh)
+            self._btn_refresh.setGraphicsEffect(effect)
+        effect.setOpacity(_REFRESH_DIM_OPACITY)
 
     def _ensure_settings_popup(self) -> TraySettingsPopup:
         if self._settings_popup is not None:
@@ -1047,6 +1102,16 @@ QPushButton {
 }
 QPushButton:hover {
     background-color: #45474b;
+}
+QPushButton#refreshButton:disabled[refreshState="loading"] {
+    color: #ececee;
+    background-color: #3a3c3e;
+    border-color: #52545a;
+}
+QPushButton#refreshButton:disabled[refreshState="cooldown"] {
+    color: #7a7a7e;
+    background-color: #2e3032;
+    border-color: #3a3c3e;
 }
 QPushButton#windowChromeButton, QPushButton#windowCloseButton {
     background: transparent;
