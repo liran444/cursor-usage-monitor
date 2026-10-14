@@ -4,7 +4,7 @@ Cursor Usage Monitor calls `GET https://cursor.com/api/usage-summary` using the 
 
 ## Manual token (recommended fallback)
 
-1. Log in at [cursor.com](https://cursor.com) in Chrome, Edge, Firefox, or Brave.
+1. Log in at [cursor.com](https://cursor.com) in any browser you use (Chrome, Edge, Firefox, Safari, Brave, Opera, etc.).
 2. Open DevTools → **Application** (Chrome) or **Storage** (Firefox) → **Cookies** → `https://cursor.com`.
 3. Copy the **Value** of `WorkosCursorSessionToken` only — not the cookie name, not `WorkosCursorSessionToken=...`.
 
@@ -48,7 +48,7 @@ It **rejects** pasting the full cookie line (`WorkosCursorSessionToken=...`).
 cursor-usage token import
 ```
 
-The app scans Chrome, Edge, Brave, and Firefox (all profiles the library can open) for `WorkosCursorSessionToken` on `cursor.com`, then saves it the same way as manual entry.
+The app scans installed browsers the import libraries support (Chrome, Chromium, Edge, Firefox, Brave, Arc, Opera, Vivaldi, LibreWolf, Safari on macOS, and others) for `WorkosCursorSessionToken` on `cursor.com`, then saves it the same way as manual entry.
 
 ```text
 cursor-usage token import --clipboard
@@ -61,9 +61,10 @@ Reads the clipboard (pyperclip, or PySide6 if installed) and saves after normali
 | Situation | What to do |
 |-----------|------------|
 | Not logged in to cursor.com | Log in in a supported browser, then import again or set manually. |
-| Safari | Not supported for automatic import; use manual token. |
-| macOS | Browser cookie databases may require **Full Disk Access** for Terminal or the packaged app. |
-| Linux | Ensure the browser is installed for your user; some distros lock cookie DB permissions. |
+| Safari (macOS) | Import is attempted; may still fail without **Full Disk Access**—use **Set token** if needed. |
+| macOS | Chromium and Safari cookie data may require **Full Disk Access** for Terminal or the packaged app. |
+| Linux | Chromium-based browsers need **gnome-keyring** or **KWallet** unlocked; Snap/Flatpak browsers may use paths import cannot read. Prefer **Set token** if import fails. |
+| Windows Chromium v130+ | **App-bound encryption** often blocks import for normal apps; use **Set token** or one elevated import attempt. |
 | Expired session | Token test fails; log in again and re-import or set a new token. |
 | Corporate WAF / VPN | `token test` or `fetch` may report blocked/HTML responses; try another network. |
 

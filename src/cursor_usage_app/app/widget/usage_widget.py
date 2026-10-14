@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -59,11 +60,14 @@ from cursor_usage_app.usage_notifications import (
 )
 
 _WIDGET_WIDTH = 303
-_LOGIN_WIDGET_WIDTH = 328
+_LOGIN_WIDGET_WIDTH = 360
 _FULL_HEIGHT = 620
 _COMPACT_HEIGHT = 230
-_LOGIN_MIN_HEIGHT = 300
-_LOGIN_WAITING_MIN_HEIGHT = 340
+_LOGIN_CARD_MARGINS = (12, 10, 12, 10)
+_LOGIN_CARD_SPACING = 8
+_TOKEN_CARD_MARGINS = (12, 8, 12, 8)
+_TOKEN_CARD_SPACING = 6
+_LOGIN_ROOT_SPACING = 8
 _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
 _LOGIN_URL = "https://cursor.com/login"
 _LOGIN_POLL_MS = 2000
@@ -85,7 +89,7 @@ class UsageWidget(QWidget):
     compact_changed = Signal(bool)
     tray_settings_changed = Signal()
     _login_imported = Signal(str)
-    _login_import_failed = Signal(str)
+    _login_import_failed = Signal(object)
 
     def __init__(
         self,
@@ -214,23 +218,69 @@ class UsageWidget(QWidget):
         layout = self.layout()
         if layout is None:
             return _COMPACT_HEIGHT if self._compact else _FULL_HEIGHT
+        self.ensurePolished()
+        self._pin_wrapped_labels()
         layout.invalidate()
         layout.activate()
-        height = layout.sizeHint().height()
-        if self._needs_browser_login():
-            height = max(height, _LOGIN_MIN_HEIGHT)
-            if self._login_waiting or self._login_status.isVisible() or self._login_error.isVisible():
-                height = max(height, _LOGIN_WAITING_MIN_HEIGHT)
-            body_width = self.preferred_width() - 48
-            if body_width > 0:
-                wrapped = self._login_body.heightForWidth(body_width)
-                if wrapped > 0:
-                    height = max(height, wrapped + 200)
-        return height
+        return layout.sizeHint().height()
+
+    def _pin_wrapped_labels(self) -> None:
+        """Keep wrapped labels at text height so leftover window space cannot open gaps inside cards."""
+        width = self._wrapped_text_width()
+        labels = (
+            self._login_body,
+            self._login_status,
+            self._login_error,
+            self._token_hint,
+            self._token_error,
+        )
+        for label in labels:
+            # isHidden(), not isVisible(): a hidden window makes every child
+            # "not visible", which was clearing the pin before the first paint.
+            if label.isHidden() or label.text().strip() == "":
+                if label.property("_wrap_pin") is None and label.maximumHeight() == 16777215:
+                    continue
+                label.setProperty("_wrap_pin", None)
+                label.setMinimumHeight(0)
+                label.setMaximumHeight(16777215)
+                continue
+            text_height = self._wrapped_label_height(label, width)
+            pin_key = (label.text(), width, text_height)
+            if label.property("_wrap_pin") == pin_key:
+                continue
+            label.setProperty("_wrap_pin", pin_key)
+            label.setMinimumHeight(text_height)
+            label.setMaximumHeight(text_height)
+
+    def _wrapped_text_width(self) -> int:
+        root_left, _, root_right, _ = self.layout().getContentsMargins()
+        card_left, _, card_right, _ = self._login_card.layout().getContentsMargins()
+        # Stylesheet border is not included in frameWidth(); the laid-out label is 2px narrower.
+        border = 2
+        return max(
+            1,
+            self.preferred_width() - root_left - root_right - card_left - card_right - border,
+        )
+
+    def _wrapped_label_height(self, label: QLabel, body_width: int) -> int:
+        text = label.text().strip()
+        if text == "":
+            return 0
+        label.ensurePolished()
+        rect = label.fontMetrics().boundingRect(
+            0,
+            0,
+            body_width,
+            10_000,
+            int(Qt.TextFlag.TextWordWrap),
+            text,
+        )
+        return rect.height() + (label.margin() * 2)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 12)
+        self._root_layout = root
         root.setSpacing(8)
 
         self._btn_settings = _icon_tool_button(
@@ -280,18 +330,22 @@ class UsageWidget(QWidget):
 
         self._login_card = QFrame()
         self._login_card.setObjectName("insetCard")
+        self._login_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         login_layout = QVBoxLayout(self._login_card)
-        login_layout.setContentsMargins(12, 12, 12, 12)
-        login_layout.setSpacing(8)
+        login_layout.setContentsMargins(*_LOGIN_CARD_MARGINS)
+        login_layout.setSpacing(_LOGIN_CARD_SPACING)
         login_title = QLabel("Sign in to Cursor")
         login_title.setObjectName("sectionTitle")
+        login_title.setContentsMargins(0, 0, 0, 0)
         login_layout.addWidget(login_title)
         self._login_body = QLabel(
-            "Open Cursor in your browser and sign in. "
-            "This window reads the session when you come back."
+            "Sign in at cursor.com in any browser you use, then return here. "
+            "Automatic import often fails (Windows Chromium encryption, macOS permissions, "
+            "Linux keyring)—use Set token below if import does not work."
         )
         self._login_body.setObjectName("mutedLabel")
         self._login_body.setWordWrap(True)
+        self._login_body.setContentsMargins(0, 0, 0, 0)
         login_layout.addWidget(self._login_body)
         self._btn_login = _pill_button("Log in to Cursor")
         self._btn_login.setObjectName("loginButton")
@@ -465,18 +519,21 @@ class UsageWidget(QWidget):
 
         self._token_panel = QFrame()
         self._token_panel.setObjectName("insetCard")
+        self._token_panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         token_layout = QVBoxLayout(self._token_panel)
-        token_layout.setContentsMargins(12, 10, 12, 10)
-        token_layout.setSpacing(6)
+        token_layout.setContentsMargins(*_TOKEN_CARD_MARGINS)
+        token_layout.setSpacing(_TOKEN_CARD_SPACING)
         token_title = QLabel("Session token")
         token_title.setObjectName("sectionTitle")
+        token_title.setContentsMargins(0, 0, 0, 0)
         token_layout.addWidget(token_title)
-        token_hint = QLabel(
+        self._token_hint = QLabel(
             "Paste WorkosCursorSessionToken from DevTools → Application → Cookies → cursor.com."
         )
-        token_hint.setObjectName("mutedLabel")
-        token_hint.setWordWrap(True)
-        token_layout.addWidget(token_hint)
+        self._token_hint.setObjectName("mutedLabel")
+        self._token_hint.setWordWrap(True)
+        self._token_hint.setContentsMargins(0, 0, 0, 0)
+        token_layout.addWidget(self._token_hint)
         self._token_input = QLineEdit()
         self._token_input.setObjectName("tokenInput")
         self._token_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -982,6 +1039,8 @@ class UsageWidget(QWidget):
             self._hide_settings_popup()
         self._btn_dashboard.setVisible(not login and not compact)
         self._sync_section_rules()
+        if show_data and self.isVisible():
+            self._schedule_refresh_metrics_lock()
 
     def _sync_section_rules(self) -> None:
         """One hairline between each visible section; hidden sections take their rule with them."""
@@ -1042,19 +1101,26 @@ class UsageWidget(QWidget):
             return
         if int(time.monotonic() * 1000) >= self._login_deadline_ms:
             self._finish_login_failed(
-                "Could not read a Cursor session from the browser. Set the token manually."
+                BrowserImportError(
+                    "Could not read a Cursor session from the browser. Set the token manually.",
+                ),
             )
             return
         self._login_busy = True
+        self._login_status.setText("Checking installed browsers for a cursor.com session…")
+        self._login_status.show()
+        QTimer.singleShot(0, self._resize_to_mode)
 
         def task() -> None:
             try:
                 result = import_session_token_from_browsers()
             except BrowserImportError as exc:
-                self._login_import_failed.emit(str(exc))
+                self._login_import_failed.emit(exc)
                 return
             except Exception:
-                self._login_import_failed.emit("Could not read the browser session.")
+                self._login_import_failed.emit(
+                    BrowserImportError("Could not read the browser session."),
+                )
                 return
             self._login_imported.emit(result.token)
 
@@ -1069,7 +1135,7 @@ class UsageWidget(QWidget):
         try:
             self._store.set_token(token)
         except Exception as exc:
-            self._finish_login_failed(str(exc))
+            self._finish_login_failed(BrowserImportError(str(exc)))
             return
         self._stop_login_wait()
         self._login_error.hide()
@@ -1078,25 +1144,33 @@ class UsageWidget(QWidget):
         self._resize_to_mode()
         self.refresh()
 
-    def _on_import_error(self, message: str) -> None:
+    def _on_import_error(self, exc: object) -> None:
         self._login_busy = False
         if not self._login_waiting:
             return
-        if not is_retryable_import_error(BrowserImportError(message)):
-            self._finish_login_failed(message)
+        if not isinstance(exc, BrowserImportError):
+            exc = BrowserImportError(str(exc))
+        if not is_retryable_import_error(exc):
+            self._finish_login_failed(exc)
             return
         self._login_status.setText(
             "Still waiting for a cursor.com session. Finish signing in, then return here."
         )
         self._resize_to_mode()
 
-    def _finish_login_failed(self, message: str) -> None:
+    def _finish_login_failed(self, exc: BrowserImportError | str) -> None:
+        if isinstance(exc, str):
+            exc = BrowserImportError(exc)
         self._stop_login_wait()
+        self._login_busy = False
         self._login_status.hide()
         self._login_status.setText("")
-        self._login_error.setText(_login_failure_text(message))
+        self._login_error.setText(_login_failure_text(exc))
         self._login_error.show()
-        self._resize_to_mode()
+        self._login_error.adjustSize()
+        QTimer.singleShot(0, self._resize_to_mode)
+        if exc.decrypt_blocked:
+            self.show_token_editor()
 
     def _stop_login_wait(self) -> None:
         self._login_waiting = False
@@ -1148,7 +1222,14 @@ class UsageWidget(QWidget):
         if self._settings_popup is not None:
             self._sync_tray_display_radios()
             self._sync_theme_radios()
-        if self._refresh_metrics_locked:
+        self._schedule_refresh_metrics_lock()
+
+    def _schedule_refresh_metrics_lock(self) -> None:
+        """Lock Refresh size only once the usage actions are on screen.
+
+        Doing this on the sign-in view resized the window a frame after it appeared.
+        """
+        if self._refresh_metrics_locked or not self._action_row.isVisible():
             return
         self._refresh_metrics_locked = True
         QTimer.singleShot(0, self._lock_refresh_button_metrics)
@@ -1160,8 +1241,15 @@ class UsageWidget(QWidget):
         self._resize_to_mode()
 
     def _resize_to_mode(self) -> None:
-        self.setFixedWidth(self.preferred_width())
-        self.setFixedHeight(self.preferred_height())
+        root = getattr(self, "_root_layout", None)
+        if root is not None:
+            spacing = _LOGIN_ROOT_SPACING if self._needs_browser_login() else 8
+            if root.spacing() != spacing:
+                root.setSpacing(spacing)
+        width = self.preferred_width()
+        height = self.preferred_height()
+        if self.width() != width or self.height() != height:
+            self.setFixedSize(width, height)
         window = self.window()
         if window is not None and hasattr(window, "resize_for_content"):
             if getattr(window, "_card", None) is not None:
@@ -1186,16 +1274,16 @@ class UsageWidget(QWidget):
             self._opacity_fader.fade_to(widget, _DATA_DIM_OPACITY)
 
 
-def _login_failure_text(message: str) -> str:
+def _login_failure_text(exc: BrowserImportError) -> str:
+    if exc.decrypt_blocked:
+        return str(exc)
+    message = str(exc)
     lowered = message.lower()
     if "appbound" in lowered or "decrypt" in lowered or "running as admin" in lowered:
-        return (
-            "Couldn’t read the browser session. Windows blocked cookie access. "
-            "Use Set token and paste WorkosCursorSessionToken from DevTools."
-        )
+        return str(exc)
     return (
         "No Cursor session was found. Sign in in the browser and try again, "
-        "or use Set token to paste it manually."
+        "or use Set token to paste WorkosCursorSessionToken from DevTools."
     )
 
 

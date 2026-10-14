@@ -15,7 +15,11 @@ from cursor_usage_app.app.tray_ring import render_tray_ring_icon, tray_ring_disp
 from cursor_usage_app.app.tray_tooltip import build_tray_tooltip
 from cursor_usage_app.app.widget.fetch_worker import load_cache, start_fetch_in_thread
 from cursor_usage_app.app.widget.usage_window import UsageWindow, apply_shell_icon
-from cursor_usage_app.auth.browser_import import BrowserImportError, import_session_token_from_browsers
+from cursor_usage_app.auth.browser_import import (
+    BrowserImportError,
+    BrowserImportResult,
+    import_session_token_from_browsers,
+)
 from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.cache.usage_cache import default_cache_path
 from cursor_usage_app.app.usage_notifier import UsageNotifier
@@ -29,6 +33,7 @@ _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
 
 class TrayController(QObject):
     _silent_import_finished = Signal()
+    _interactive_import_finished = Signal(object, object)  # BrowserImportResult | None, exc | None
     def __init__(
         self,
         store: SessionStore | None = None,
@@ -50,6 +55,8 @@ class TrayController(QObject):
         self._fetch_runner = None
 
         self._silent_import_finished.connect(self.refresh)
+        self._interactive_import_finished.connect(self._on_interactive_import_finished)
+        self._import_busy = False
         self._window.widget().tray_settings_changed.connect(self._on_tray_settings_changed)
 
         self._tray = QSystemTrayIcon(self)
@@ -137,9 +144,48 @@ class TrayController(QObject):
             return False
 
     def _import_session_interactive(self) -> None:
-        try:
-            result = import_session_token_from_browsers()
-            self._store.set_token(result.token)
+        if self._import_busy:
+            return
+        self._import_busy = True
+
+        def task() -> None:
+            try:
+                result = import_session_token_from_browsers()
+            except BrowserImportError as exc:
+                self._interactive_import_finished.emit(None, exc)
+                return
+            except Exception as exc:
+                self._interactive_import_finished.emit(
+                    None,
+                    BrowserImportError("Could not read the browser session."),
+                )
+                _LOGGER.debug("Interactive import failed: %s", exc.__class__.__name__)
+                return
+            self._interactive_import_finished.emit(result, None)
+
+        threading.Thread(
+            target=task,
+            name="cursor-usage-tray-import",
+            daemon=True,
+        ).start()
+
+    def _on_interactive_import_finished(
+        self,
+        result: BrowserImportResult | None,
+        exc: BrowserImportError | None,
+    ) -> None:
+        self._import_busy = False
+        if result is not None:
+            try:
+                self._store.set_token(result.token)
+            except Exception as store_exc:
+                self._tray.showMessage(
+                    "Cursor Usage",
+                    str(store_exc),
+                    QSystemTrayIcon.MessageIcon.Warning,
+                    6000,
+                )
+                return
             self._tray.showMessage(
                 "Cursor Usage",
                 f"Imported session from {result.source}.",
@@ -147,13 +193,18 @@ class TrayController(QObject):
                 4000,
             )
             self.refresh()
-        except BrowserImportError as exc:
-            self._tray.showMessage(
-                "Cursor Usage",
-                str(exc),
-                QSystemTrayIcon.MessageIcon.Warning,
-                6000,
-            )
+            return
+        if exc is None:
+            return
+        self._reveal_widget()
+        if exc.decrypt_blocked:
+            self._window.widget().show_token_editor()
+        self._tray.showMessage(
+            "Cursor Usage",
+            str(exc),
+            QSystemTrayIcon.MessageIcon.Warning,
+            6000,
+        )
 
     def _open_widget(self) -> None:
         self._reveal_widget()

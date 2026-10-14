@@ -260,6 +260,8 @@ QLabel#sectionTitle {{
     color: {p.text_primary};
     font-size: 14px;
     font-weight: 650;
+    margin: 0px;
+    padding: 0px;
 }}
 QLabel#amountLabel {{
     color: {p.amount};
@@ -294,6 +296,8 @@ QLabel#onDemandPercent {{
 QLabel#mutedLabel {{
     color: {p.muted};
     font-size: 12px;
+    margin: 0px;
+    padding: 0px;
 }}
 QLabel#cardTitle {{
     color: {p.text_primary};

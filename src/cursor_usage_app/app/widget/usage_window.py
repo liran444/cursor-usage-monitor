@@ -55,6 +55,8 @@ class UsageWindow(QWidget):
         self._card.minimize_requested.connect(self.showMinimized)
         self._card.compact_changed.connect(lambda _c: self.resize_for_content())
 
+        self._card.ensurePolished()
+        self.ensurePolished()
         self.resize_for_content()
         if auto_center:
             self._center_on_screen()
@@ -78,8 +80,14 @@ class UsageWindow(QWidget):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
-        self._card.move(2, 2)
-        self._card.setFixedWidth(self._card.preferred_width())
+        # Fit the card to the frame. Re-measuring text here runs after the first
+        # paint and shifts margins by a few pixels.
+        inset = 2
+        self._card.move(inset, inset)
+        self._card.setFixedSize(
+            max(1, self.width() - (inset * 2)),
+            max(1, self.height() - (inset * 2)),
+        )
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
         if event.key() == Qt.Key.Key_Escape:
