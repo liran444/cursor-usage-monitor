@@ -46,7 +46,7 @@ def test_widget_team_fixture_layout(qapp) -> None:
     assert widget._btn_dashboard.text() == "Dashboard"
     assert widget._btn_quit.isHidden() is False
     assert widget.is_compact() is False
-    assert widget.width() == 295
+    assert widget.width() == 303
     full_height = widget.preferred_height()
     assert full_height > 400
 

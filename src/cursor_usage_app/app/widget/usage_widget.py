@@ -54,7 +54,7 @@ from cursor_usage_app.usage_notifications import (
     usage_percent_for_section,
 )
 
-_WIDGET_WIDTH = 295
+_WIDGET_WIDTH = 303
 _FULL_HEIGHT = 620
 _COMPACT_HEIGHT = 230
 _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
@@ -66,8 +66,8 @@ _REFRESH_DIM_OPACITY = 0.42
 _DATA_DIM_OPACITY = 0.35
 _OPACITY_FADE_MS = 300
 _SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
-_CARD_SECTION_INSET_MARGINS = (12, 10, 12, 10)
-_SECTION_INSET_MARGINS = (12, 2, 12, 2)
+_CARD_SECTION_INSET_MARGINS = (8, 10, 8, 10)
+_SECTION_INSET_MARGINS = (8, 2, 8, 2)
 
 
 class UsageWidget(QWidget):

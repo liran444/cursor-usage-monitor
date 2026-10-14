@@ -12,7 +12,7 @@ from cursor_usage_app.app.widget import colors
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
 from cursor_usage_app.auth.session_store import SessionStore
 
-_WIDGET_WIDTH = 295
+_WIDGET_WIDTH = 303
 
 
 class UsageWindow(QWidget):
