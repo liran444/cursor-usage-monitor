@@ -14,7 +14,7 @@ from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
 from cursor_usage_app.auth.session_store import SessionStore
 
-_WIDGET_WIDTH = 303
+_WIDGET_WIDTH = 310
 _WINDOW_TITLE = "Cursor Usage"
 
 
