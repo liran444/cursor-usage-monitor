@@ -43,9 +43,11 @@ from cursor_usage_app.app.widget.view_model import (
     view_model_loading,
 )
 from cursor_usage_app.auth.browser_import import (
+    BrowserImportBusyError,
     BrowserImportError,
     import_session_token_from_browsers,
     is_retryable_import_error,
+    set_browser_login_flow_active,
 )
 from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.auth.token_normalize import TokenNormalizeError
@@ -70,7 +72,8 @@ _TOKEN_CARD_SPACING = 6
 _LOGIN_ROOT_SPACING = 8
 _DASHBOARD_URL = "https://cursor.com/dashboard/usage"
 _LOGIN_URL = "https://cursor.com/login"
-_LOGIN_POLL_MS = 2000
+_LOGIN_POLL_MS = 5000
+_LOGIN_FIRST_IMPORT_MS = 1500
 _LOGIN_WAIT_MS = 120_000
 _MANUAL_REFRESH_COOLDOWN_MS = 5000
 _REFRESH_DIM_OPACITY = 0.42
@@ -88,8 +91,10 @@ class UsageWidget(QWidget):
     minimize_requested = Signal()
     compact_changed = Signal(bool)
     tray_settings_changed = Signal()
+    cache_or_session_changed = Signal()
     _login_imported = Signal(str)
     _login_import_failed = Signal(object)
+    _login_import_idle = Signal()
 
     def __init__(
         self,
@@ -122,6 +127,7 @@ class UsageWidget(QWidget):
         self._busy_timer.timeout.connect(self._advance_busy_spinner)
         self._login_imported.connect(self._on_import_success)
         self._login_import_failed.connect(self._on_import_error)
+        self._login_import_idle.connect(self._clear_login_import_busy)
         self._refresh_metrics_locked = False
         self._app_settings = load_app_settings()
         apply_theme_preference(self._app_settings.theme)
@@ -653,6 +659,7 @@ class UsageWidget(QWidget):
 
     def _on_fetch_finished(self, _exit_code: int) -> None:
         self.reload_from_cache()
+        self.cache_or_session_changed.emit()
         if self._manual_refresh_cooldown:
             self._set_refresh_button_state("cooldown")
             self._refresh_cooldown_timer.start(_MANUAL_REFRESH_COOLDOWN_MS)
@@ -886,6 +893,7 @@ class UsageWidget(QWidget):
     def _save_inline_token(self) -> None:
         try:
             self._store.set_token(self._token_input.text())
+            self.cache_or_session_changed.emit()
         except TokenNormalizeError as exc:
             self._token_error.setText(str(exc))
             self._token_error.show()
@@ -1062,6 +1070,7 @@ class UsageWidget(QWidget):
         import time
 
         webbrowser.open(_LOGIN_URL)
+        set_browser_login_flow_active(True)
         self._login_waiting = True
         self._login_deadline_ms = int(time.monotonic() * 1000) + _LOGIN_WAIT_MS
         self._login_error.hide()
@@ -1076,7 +1085,7 @@ class UsageWidget(QWidget):
         self._hook_window_activation()
         if not self._login_timer.isActive():
             self._login_timer.start()
-        self._attempt_browser_import()
+        QTimer.singleShot(_LOGIN_FIRST_IMPORT_MS, self._attempt_browser_import)
 
     def _hook_window_activation(self) -> None:
         window = self.window()
@@ -1113,7 +1122,13 @@ class UsageWidget(QWidget):
 
         def task() -> None:
             try:
-                result = import_session_token_from_browsers()
+                result = import_session_token_from_browsers(
+                    scan_profile="login_poll",
+                    wait_for_lock=False,
+                )
+            except BrowserImportBusyError:
+                self._login_import_idle.emit()
+                return
             except BrowserImportError as exc:
                 self._login_import_failed.emit(exc)
                 return
@@ -1134,6 +1149,7 @@ class UsageWidget(QWidget):
             return
         try:
             self._store.set_token(token)
+            self.cache_or_session_changed.emit()
         except Exception as exc:
             self._finish_login_failed(BrowserImportError(str(exc)))
             return
@@ -1172,10 +1188,14 @@ class UsageWidget(QWidget):
         if exc.decrypt_blocked:
             self.show_token_editor()
 
+    def _clear_login_import_busy(self) -> None:
+        self._login_busy = False
+
     def _stop_login_wait(self) -> None:
         self._login_waiting = False
         self._login_timer.stop()
         self._set_login_spinner(False)
+        set_browser_login_flow_active(False)
 
     def _set_login_spinner(self, active: bool) -> None:
         if active:

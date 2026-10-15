@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, Literal, Protocol
 
 from cursor_usage_app.api.client import SESSION_COOKIE_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
+ImportScanProfile = Literal["full", "login_poll"]
+
 _CURSOR_DOMAIN_SUFFIXES = (".cursor.com", "cursor.com")
-_CURSOR_IMPORT_DOMAINS = ["cursor.com", ".cursor.com"]
 
 # Order is stable; every installed browser we can probe is tried (no single-browser assumption).
 _ROOKIEPY_BROWSER_NAMES: tuple[str, ...] = (
@@ -26,6 +28,9 @@ _ROOKIEPY_BROWSER_NAMES: tuple[str, ...] = (
     "opera_gx",
     "vivaldi",
     "librewolf",
+)
+_LOGIN_POLL_BROWSER_NAMES: frozenset[str] = frozenset(
+    {"firefox", "chrome", "edge", "brave", "chromium"},
 )
 _CHROMIUM_LOADER_LABELS = frozenset(
     {
@@ -55,6 +60,10 @@ _BC3_BROWSER_NAMES: tuple[str, ...] = (
     "safari",
 )
 
+_import_lock = threading.Lock()
+_login_flow_active = False
+_login_flow_lock = threading.Lock()
+
 
 class BrowserImportError(Exception):
     """Could not find or read a cursor.com session cookie."""
@@ -62,6 +71,10 @@ class BrowserImportError(Exception):
     def __init__(self, message: str, *, decrypt_blocked: bool = False) -> None:
         super().__init__(message)
         self.decrypt_blocked = decrypt_blocked
+
+
+class BrowserImportBusyError(BrowserImportError):
+    """Another thread is already scanning browsers."""
 
 
 @dataclass(frozen=True)
@@ -76,20 +89,49 @@ class _CookieLike(Protocol):
     domain: str
 
 
-def import_session_token_from_browsers() -> BrowserImportResult:
+def set_browser_login_flow_active(active: bool) -> None:
+    """When the user is in the sign-in flow, skip silent background import."""
+    global _login_flow_active
+    with _login_flow_lock:
+        _login_flow_active = active
+
+
+def browser_login_flow_active() -> bool:
+    with _login_flow_lock:
+        return _login_flow_active
+
+
+def import_session_token_from_browsers(
+    *,
+    scan_profile: ImportScanProfile = "full",
+    wait_for_lock: bool = True,
+) -> BrowserImportResult:
     """
     Scan common browsers for WorkosCursorSessionToken on cursor.com.
 
-    Tries rookiepy first, then browser-cookie3. Does not stop after decrypt errors
-    in one library until both have been attempted.
+    Tries rookiepy first, then browser-cookie3. Per-browser only (no library load()).
     """
+    if wait_for_lock:
+        _import_lock.acquire()
+    elif not _import_lock.acquire(blocking=False):
+        raise BrowserImportBusyError("Browser import already in progress.")
+
+    try:
+        return _import_session_token_from_browsers_locked(scan_profile)
+    finally:
+        _import_lock.release()
+
+
+def _import_session_token_from_browsers_locked(
+    scan_profile: ImportScanProfile,
+) -> BrowserImportResult:
     decrypt_notes: list[str] = []
 
-    token = _try_rookiepy(decrypt_notes)
+    token = _try_rookiepy(decrypt_notes, scan_profile)
     if token is not None:
         return token
 
-    token = _try_browser_cookie3(decrypt_notes)
+    token = _try_browser_cookie3(decrypt_notes, scan_profile)
     if token is not None:
         return token
 
@@ -105,26 +147,17 @@ def import_session_token_from_browsers() -> BrowserImportResult:
     )
 
 
-def _try_rookiepy(decrypt_notes: list[str]) -> BrowserImportResult | None:
+def _try_rookiepy(
+    decrypt_notes: list[str],
+    scan_profile: ImportScanProfile,
+) -> BrowserImportResult | None:
     try:
         import rookiepy
     except ImportError:
         return None
 
     chromium_decrypt_seen = False
-    load_fn = getattr(rookiepy, "load", None)
-    if callable(load_fn):
-        try:
-            cookies = load_fn(_CURSOR_IMPORT_DOMAINS)
-            match = _find_session_cookie(cookies)
-            if match is not None:
-                return BrowserImportResult(token=match, source="rookiepy:load")
-        except Exception as exc:
-            if _is_decrypt_failure(exc):
-                decrypt_notes.append(f"rookiepy:load: {_short_error(exc)}")
-                chromium_decrypt_seen = True
-            _LOGGER.debug("rookiepy load failed: %s", exc)
-    for label, loader in _rookiepy_loaders(rookiepy):
+    for label, loader in _rookiepy_loaders(rookiepy, scan_profile):
         if _skip_chromium_loader(chromium_decrypt_seen, label):
             continue
         try:
@@ -142,26 +175,17 @@ def _try_rookiepy(decrypt_notes: list[str]) -> BrowserImportResult | None:
     return None
 
 
-def _try_browser_cookie3(decrypt_notes: list[str]) -> BrowserImportResult | None:
+def _try_browser_cookie3(
+    decrypt_notes: list[str],
+    scan_profile: ImportScanProfile,
+) -> BrowserImportResult | None:
     try:
         import browser_cookie3
     except ImportError:
         return None
 
     chromium_decrypt_seen = False
-    load_fn = getattr(browser_cookie3, "load", None)
-    if callable(load_fn):
-        try:
-            jar = load_fn(domain_name="cursor.com")
-            match = _find_session_in_jar(jar)
-            if match is not None:
-                return BrowserImportResult(token=match, source="browser_cookie3:load")
-        except Exception as exc:
-            if _is_decrypt_failure(exc):
-                decrypt_notes.append(f"browser_cookie3:load: {_short_error(exc)}")
-                chromium_decrypt_seen = True
-            _LOGGER.debug("browser_cookie3 load failed: %s", exc)
-    for label, loader in _bc3_loaders(browser_cookie3):
+    for label, loader in _bc3_loaders(browser_cookie3, scan_profile):
         if _skip_chromium_loader(chromium_decrypt_seen, label):
             continue
         try:
@@ -179,19 +203,37 @@ def _try_browser_cookie3(decrypt_notes: list[str]) -> BrowserImportResult | None
     return None
 
 
+def _browser_names_for_profile(
+    names: list[str],
+    scan_profile: ImportScanProfile,
+) -> list[str]:
+    if scan_profile != "login_poll":
+        return names
+    filtered = [name for name in names if name in _LOGIN_POLL_BROWSER_NAMES]
+    if sys.platform == "darwin" and "safari" in names:
+        filtered.append("safari")
+    return filtered
+
+
 def _rookiepy_loaders(
     rookiepy: object,
+    scan_profile: ImportScanProfile,
 ) -> list[tuple[str, Callable[[], list[object]]]]:
     names = list(_ROOKIEPY_BROWSER_NAMES)
     if sys.platform == "darwin":
         names.append("safari")
     if sys.platform == "win32":
         names.extend(("internet_explorer", "octo_browser"))
+    names = _browser_names_for_profile(names, scan_profile)
     return _callable_loaders(rookiepy, names)
 
 
-def _bc3_loaders(browser_cookie3: object) -> list[tuple[str, Callable[[], object]]]:
-    return _callable_loaders(browser_cookie3, list(_BC3_BROWSER_NAMES))
+def _bc3_loaders(
+    browser_cookie3: object,
+    scan_profile: ImportScanProfile,
+) -> list[tuple[str, Callable[[], object]]]:
+    names = _browser_names_for_profile(list(_BC3_BROWSER_NAMES), scan_profile)
+    return _callable_loaders(browser_cookie3, names)
 
 
 def _callable_loaders(
@@ -269,6 +311,8 @@ def _short_error(exc: BaseException) -> str:
 
 def is_retryable_import_error(exc: BrowserImportError) -> bool:
     """Cookie not present yet (user still signing in). Decrypt failures are not retried."""
+    if isinstance(exc, BrowserImportBusyError):
+        return True
     if getattr(exc, "decrypt_blocked", False):
         return False
     text = str(exc).lower()

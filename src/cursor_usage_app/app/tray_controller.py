@@ -11,13 +11,17 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QAction, QCursor
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from cursor_usage_app.app.tray_ring import render_tray_ring_icon, tray_ring_display_from_envelope
+from cursor_usage_app.app.tray_ring import (
+    render_tray_ring_icon,
+    tray_ring_display_for_session,
+)
 from cursor_usage_app.app.tray_tooltip import build_tray_tooltip
 from cursor_usage_app.app.widget.fetch_worker import load_cache, start_fetch_in_thread
 from cursor_usage_app.app.widget.usage_window import UsageWindow, apply_shell_icon
 from cursor_usage_app.auth.browser_import import (
     BrowserImportError,
     BrowserImportResult,
+    browser_login_flow_active,
     import_session_token_from_browsers,
 )
 from cursor_usage_app.auth.session_store import SessionStore
@@ -58,6 +62,7 @@ class TrayController(QObject):
         self._interactive_import_finished.connect(self._on_interactive_import_finished)
         self._import_busy = False
         self._window.widget().tray_settings_changed.connect(self._on_tray_settings_changed)
+        self._window.widget().cache_or_session_changed.connect(self.sync_tray_chrome)
 
         self._tray = QSystemTrayIcon(self)
         self._tray.setToolTip("Cursor Usage")
@@ -133,6 +138,8 @@ class TrayController(QObject):
         ).start()
 
     def _try_silent_browser_import(self) -> bool:
+        if browser_login_flow_active():
+            return False
         try:
             result = import_session_token_from_browsers()
             self._store.set_token(result.token)
@@ -186,6 +193,7 @@ class TrayController(QObject):
                     6000,
                 )
                 return
+            self.sync_tray_chrome()
             self._tray.showMessage(
                 "Cursor Usage",
                 f"Imported session from {result.source}.",
@@ -246,11 +254,18 @@ class TrayController(QObject):
 
     def _on_tray_settings_changed(self) -> None:
         self._settings = load_app_settings()
+        self.sync_tray_chrome()
+
+    def sync_tray_chrome(self) -> None:
         self._apply_cache_to_tray(load_cache(self._cache_path))
 
     def _apply_cache_to_tray(self, envelope) -> None:
         mode = self._settings.tray_display_mode
-        display = tray_ring_display_from_envelope(envelope, mode=mode)
+        display = tray_ring_display_for_session(
+            envelope,
+            self._store.has_token(),
+            mode=mode,
+        )
         shell_icon = render_tray_ring_icon(display)
         self._tray.setIcon(shell_icon)
         apply_shell_icon(shell_icon, window=self._window)

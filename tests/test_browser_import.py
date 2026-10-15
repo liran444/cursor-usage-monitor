@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from cursor_usage_app.auth.browser_import import (
+    BrowserImportBusyError,
     BrowserImportError,
     _decrypt_blocked_message,
     import_session_token_from_browsers,
@@ -21,7 +22,6 @@ def test_import_finds_cookie_via_rookiepy(monkeypatch) -> None:
         return [cookie]
 
     fake_rookiepy = SimpleNamespace(
-        load=lambda _domains: [],
         chrome=fake_chrome,
         edge=lambda: [],
         brave=lambda: [],
@@ -30,7 +30,7 @@ def test_import_finds_cookie_via_rookiepy(monkeypatch) -> None:
     monkeypatch.setitem(__import__("sys").modules, "rookiepy", fake_rookiepy)
     monkeypatch.setattr(
         "cursor_usage_app.auth.browser_import._try_browser_cookie3",
-        lambda _notes: None,
+        lambda _notes, _profile: None,
     )
 
     result = import_session_token_from_browsers()
@@ -41,11 +41,11 @@ def test_import_finds_cookie_via_rookiepy(monkeypatch) -> None:
 def test_import_raises_when_no_libraries(monkeypatch) -> None:
     monkeypatch.setattr(
         "cursor_usage_app.auth.browser_import._try_rookiepy",
-        lambda _notes: None,
+        lambda _notes, _profile: None,
     )
     monkeypatch.setattr(
         "cursor_usage_app.auth.browser_import._try_browser_cookie3",
-        lambda _notes: None,
+        lambda _notes, _profile: None,
     )
     with pytest.raises(BrowserImportError) as raised:
         import_session_token_from_browsers()
@@ -55,7 +55,7 @@ def test_import_raises_when_no_libraries(monkeypatch) -> None:
 def test_import_browser_cookie3_fallback(monkeypatch) -> None:
     monkeypatch.setattr(
         "cursor_usage_app.auth.browser_import._try_rookiepy",
-        lambda _notes: None,
+        lambda _notes, _profile: None,
     )
 
     cookie = SimpleNamespace(
@@ -68,7 +68,6 @@ def test_import_browser_cookie3_fallback(monkeypatch) -> None:
         return [cookie]
 
     fake_bc3 = SimpleNamespace(
-        load=lambda domain_name="": [],
         chrome=lambda: [],
         edge=fake_edge,
         brave=lambda: [],
@@ -86,7 +85,6 @@ def test_rookiepy_decrypt_still_tries_browser_cookie3(monkeypatch) -> None:
         raise RuntimeError("could not decrypt cookie database")
 
     fake_rookiepy = SimpleNamespace(
-        load=lambda _domains: [],
         chrome=lambda: [],
         edge=lambda: [],
         brave=fake_brave,
@@ -104,7 +102,6 @@ def test_rookiepy_decrypt_still_tries_browser_cookie3(monkeypatch) -> None:
         return [cookie]
 
     fake_bc3 = SimpleNamespace(
-        load=lambda domain_name="": [],
         chrome=lambda: [],
         edge=lambda: [],
         brave=fake_brave_jar,
@@ -122,7 +119,6 @@ def test_decrypt_failure_raises_decrypt_blocked(monkeypatch) -> None:
         raise RuntimeError("Unable to get key for cookie decryption")
 
     fake_rookiepy = SimpleNamespace(
-        load=fail_loader,
         chrome=fail_loader,
         edge=fail_loader,
         brave=fail_loader,
@@ -130,7 +126,6 @@ def test_decrypt_failure_raises_decrypt_blocked(monkeypatch) -> None:
     )
     monkeypatch.setitem(__import__("sys").modules, "rookiepy", fake_rookiepy)
     fake_bc3 = SimpleNamespace(
-        load=fail_loader,
         chrome=fail_loader,
         edge=fail_loader,
         brave=fail_loader,
@@ -151,18 +146,55 @@ def test_rookiepy_dict_cookies(monkeypatch) -> None:
     }
 
     fake_rookiepy = SimpleNamespace(
-        load=lambda _domains: [cookie],
-        chrome=lambda: [],
+        chrome=lambda: [cookie],
     )
     monkeypatch.setitem(__import__("sys").modules, "rookiepy", fake_rookiepy)
     monkeypatch.setattr(
         "cursor_usage_app.auth.browser_import._try_browser_cookie3",
-        lambda _notes: None,
+        lambda _notes, _profile: None,
     )
 
     result = import_session_token_from_browsers()
     assert result.token == "dict-token"
-    assert result.source == "rookiepy:load"
+    assert result.source == "rookiepy:chrome"
+
+
+def test_login_poll_skips_arc(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def track(name: str) -> list[SimpleNamespace]:
+        calls.append(name)
+        return []
+
+    fake_rookiepy = SimpleNamespace(
+        firefox=lambda: track("firefox"),
+        chrome=lambda: track("chrome"),
+        edge=lambda: track("edge"),
+        brave=lambda: track("brave"),
+        arc=lambda: track("arc"),
+    )
+    monkeypatch.setitem(__import__("sys").modules, "rookiepy", fake_rookiepy)
+    monkeypatch.setattr(
+        "cursor_usage_app.auth.browser_import._try_browser_cookie3",
+        lambda _notes, _profile: None,
+    )
+
+    with pytest.raises(BrowserImportError):
+        import_session_token_from_browsers(scan_profile="login_poll")
+
+    assert "arc" not in calls
+    assert "firefox" in calls
+
+
+def test_concurrent_import_raises_busy() -> None:
+    from cursor_usage_app.auth import browser_import as bi
+
+    assert bi._import_lock.acquire(blocking=False)
+    try:
+        with pytest.raises(BrowserImportBusyError):
+            import_session_token_from_browsers(wait_for_lock=False)
+    finally:
+        bi._import_lock.release()
 
 
 def test_decrypt_message_mentions_macos_browsers(monkeypatch) -> None:
@@ -175,5 +207,7 @@ def test_decrypt_message_mentions_macos_browsers(monkeypatch) -> None:
 def test_missing_cookie_is_retryable_decrypt_failure_is_not() -> None:
     missing = BrowserImportError("No WorkosCursorSessionToken found.")
     blocked = BrowserImportError("Could not decrypt brave cookies.", decrypt_blocked=True)
+    busy = BrowserImportBusyError("busy")
     assert is_retryable_import_error(missing) is True
     assert is_retryable_import_error(blocked) is False
+    assert is_retryable_import_error(busy) is True

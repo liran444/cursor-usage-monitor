@@ -77,6 +77,17 @@ def tray_ring_display_from_envelope(
     return TrayRingDisplay(center_kind="other", ring_percent=None, center_text="—")
 
 
+def tray_ring_display_for_session(
+    envelope: CacheEnvelope | None,
+    has_token: bool,
+    mode: TrayDisplayMode = DEFAULT_TRAY_DISPLAY_MODE,
+) -> TrayRingDisplay:
+    """Tray chrome from cache, but never show usage when no session token is stored."""
+    if not has_token:
+        return TrayRingDisplay(center_kind="auth", ring_percent=None, center_text="!")
+    return tray_ring_display_from_envelope(envelope, mode=mode)
+
+
 def render_tray_ring_icon(display: TrayRingDisplay) -> QIcon:
     image = QImage(_ICON_SIZE, _ICON_SIZE, QImage.Format.Format_ARGB32)
     image.fill(Qt.GlobalColor.transparent)

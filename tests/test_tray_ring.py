@@ -1,5 +1,6 @@
 from cursor_usage_app.app.tray_ring import (
     ring_arc_color_for_percent,
+    tray_ring_display_for_session,
     tray_ring_display_from_envelope,
 )
 from cursor_usage_app.app.widget import colors
@@ -45,6 +46,14 @@ def test_tray_display_auth_shows_exclamation() -> None:
         fetched_at="2026-01-01T00:00:00+00:00",
     )
     display = tray_ring_display_from_envelope(envelope)
+    assert display.center_kind == "auth"
+    assert display.center_text == "!"
+
+
+def test_tray_display_for_session_ignores_stale_ok_without_token() -> None:
+    snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_personal_only.json"))
+    envelope = CacheEnvelopeOk(ok=True, data=snapshot, fetched_at="2026-01-01T00:00:00+00:00")
+    display = tray_ring_display_for_session(envelope, has_token=False)
     assert display.center_kind == "auth"
     assert display.center_text == "!"
 
