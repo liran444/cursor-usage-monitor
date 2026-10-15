@@ -439,6 +439,12 @@ def popup_stylesheet(palette: Palette | None = None) -> str:
     color: {p.popup_path};
     font-size: 10px;
 }}
+#traySettingsPopup QWidget#sectionRule {{
+    background-color: {p.section_rule};
+    border: none;
+    min-height: 1px;
+    max-height: 1px;
+}}
 #traySettingsPopup QRadioButton {{
     color: {p.popup_radio};
     font-size: 12px;

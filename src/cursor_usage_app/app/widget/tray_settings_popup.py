@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QCursor
-from PySide6.QtWidgets import QButtonGroup, QFrame, QLabel, QRadioButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QFrame,
+    QLabel,
+    QRadioButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from cursor_usage_app.app.widget.colors import popup_stylesheet
 from cursor_usage_app.settings.app_settings import default_settings_path
@@ -55,7 +62,7 @@ class TraySettingsPopup(QFrame):
         layout.addWidget(self.radio_theme_dark)
         layout.addWidget(self.radio_theme_light)
 
-        layout.addSpacing(8)
+        layout.addWidget(_section_rule())
 
         title = QLabel("Tray display")
         title.setObjectName("sectionTitle")
@@ -115,3 +122,10 @@ class TraySettingsPopup(QFrame):
         local = anchor.mapFromGlobal(QCursor.pos())
         if anchor.rect().contains(local):
             self.dismissed_via_anchor.emit()
+
+
+def _section_rule() -> QWidget:
+    line = QWidget()
+    line.setObjectName("sectionRule")
+    line.setFixedHeight(1)
+    return line
