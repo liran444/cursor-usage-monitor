@@ -102,13 +102,18 @@ cursor_usage_install_app() {
   cp "$SCRIPT_DIR/uninstall.sh" "$INSTALL_ROOT/uninstall.sh"
   chmod +x "$INSTALL_ROOT/uninstall.sh"
 
+  icon_name="preferences-system"
+  if [[ -f "${INSTALL_ROOT}/assets/app-icon.png" ]]; then
+    icon_name="${INSTALL_ROOT}/assets/app-icon.png"
+  fi
+
   cat > "$DESKTOP_DIR/$APP_ID" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Cursor Usage
 Comment=Cursor usage monitor tray
 Exec=${INSTALL_ROOT}/cursor-usage
-Icon=preferences-system
+Icon=${icon_name}
 Terminal=false
 Categories=Utility;
 StartupNotify=false

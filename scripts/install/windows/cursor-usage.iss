@@ -27,6 +27,8 @@ WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+SetupIconFile={#RepoRoot}\src\cursor_usage_app\assets\app-icon.ico
+UninstallDisplayIcon={app}\{#AppExeName}
 LicenseFile={#RepoRoot}\LICENSE
 InfoBeforeFile={#RepoRoot}\README-USER.txt
 

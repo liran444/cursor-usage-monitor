@@ -8,8 +8,7 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QCursor, QGuiApplication, QIcon, QKeyEvent, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
-from cursor_usage_app.app.shell_branding import icon_for_shell
-from cursor_usage_app.app.tray_ring import TrayRingDisplay, render_tray_ring_icon
+from cursor_usage_app.app.shell_branding import icon_for_shell, load_app_icon
 from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
 from cursor_usage_app.app.widget.window_drag import (
@@ -25,7 +24,7 @@ _WINDOW_TITLE = "Cursor Usage"
 
 
 def apply_shell_icon(icon: QIcon, window: QWidget | None = None) -> None:
-    """Keep taskbar / Dock icon in sync with the tray ring."""
+    """Set the window and taskbar icon. The tray icon is separate."""
     shell_icon = icon_for_shell(icon)
     app = QApplication.instance()
     if app is not None:
@@ -48,12 +47,7 @@ class UsageWindow(QWidget):
             | Qt.WindowType.FramelessWindowHint
         )
         self.setWindowTitle(_WINDOW_TITLE)
-        apply_shell_icon(
-            render_tray_ring_icon(
-                TrayRingDisplay(center_kind="empty", ring_percent=None, center_text="—"),
-            ),
-            window=self,
-        )
+        apply_shell_icon(load_app_icon(), window=self)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         self._card = UsageWidget(self, cache_path=cache_path, store=store)

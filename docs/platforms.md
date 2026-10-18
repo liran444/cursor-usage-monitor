@@ -4,7 +4,7 @@
 
 - **Tray icon** shows total usage % (or error states `!` / `—`).
 - **Notifications** may be suppressed by Focus Assist; the tray icon still updates.
-- **Taskbar icon** uses the app ring icon (not `python.exe`) when running the installed tray build.
+- **Taskbar and window icon** is the app mark. The **tray icon** stays the live usage ring (percent, `!`, or `—`), not that mark.
 - **Browser import** reads cookies from installed Chromium/Firefox profiles for the current user.
 
 ## macOS

@@ -10,11 +10,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
 from cursor_usage_app.app.shell_branding import configure_process_for_shell
-from cursor_usage_app.app.tray_ring import render_tray_ring_icon, tray_ring_display_from_envelope
-from cursor_usage_app.app.widget.fetch_worker import load_cache
-from cursor_usage_app.app.widget.usage_window import UsageWindow, apply_shell_icon
-from cursor_usage_app.cache.usage_cache import default_cache_path
-from cursor_usage_app.settings.app_settings import load_app_settings
+from cursor_usage_app.app.widget.usage_window import UsageWindow
 
 
 def run_widget(argv: list[str] | None = None) -> int:
@@ -34,10 +30,6 @@ def run_widget(argv: list[str] | None = None) -> int:
     window = UsageWindow()
     widget = window.widget()
     widget.reload_from_cache()
-    settings = load_app_settings()
-    envelope = load_cache(default_cache_path())
-    display = tray_ring_display_from_envelope(envelope, mode=settings.tray_display_mode)
-    apply_shell_icon(render_tray_ring_icon(display), window=window)
 
     env_fixture = os.environ.get("CURSOR_USAGE_WIDGET_FIXTURE")
     if env_fixture:

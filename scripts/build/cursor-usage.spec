@@ -9,10 +9,15 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 SPECPATH = Path(SPECPATH)
 REPO_ROOT = SPECPATH.parents[1]
 SRC = REPO_ROOT / "src"
+ASSETS = SRC / "cursor_usage_app" / "assets"
+APP_ICON_PNG = ASSETS / "app-icon.png"
+APP_ICON_ICO = ASSETS / "app-icon.ico"
 
 block_cipher = None
 
 datas = []
+if APP_ICON_PNG.is_file():
+    datas.append((str(APP_ICON_PNG), "assets"))
 binaries = []
 hiddenimports = [
     "certifi",
@@ -83,6 +88,7 @@ exe_app = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(APP_ICON_ICO) if (sys.platform == "win32" and APP_ICON_ICO.is_file()) else None,
 )
 
 coll = COLLECT(
@@ -100,7 +106,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="Cursor Usage.app",
-        icon=None,
+        icon=str(ASSETS / "app-icon.icns") if (ASSETS / "app-icon.icns").is_file() else None,
         bundle_identifier="com.lirandekamhi.cursor-usage",
         info_plist={
             "CFBundleName": "Cursor Usage",

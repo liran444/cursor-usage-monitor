@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cursor-usage-app"
-version = "0.1.5"
+version = "0.1.6"
 description = "Cursor usage monitor (clean-slate rebuild)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -36,6 +36,9 @@ cursor-usage = "cursor_usage_app.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+cursor_usage_app = ["assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,7 +6,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from cursor_usage_app.app.shell_branding import icon_for_shell
+from cursor_usage_app.app.shell_branding import app_icon_path, icon_for_shell, load_app_icon
 from cursor_usage_app.app.tray_ring import TrayRingDisplay, render_tray_ring_icon
 
 pytestmark = pytest.mark.skipif(
@@ -23,6 +23,13 @@ def qapp():
     if app is None:
         app = QApplication([])
     return app
+
+
+def test_load_app_icon_is_the_static_mark(qapp) -> None:
+    assert app_icon_path().is_file()
+    icon = load_app_icon()
+    assert not icon.isNull()
+    assert not icon.pixmap(48).isNull()
 
 
 def test_icon_for_shell_adds_standard_sizes(qapp) -> None:

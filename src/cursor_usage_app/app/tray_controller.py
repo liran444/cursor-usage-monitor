@@ -17,7 +17,7 @@ from cursor_usage_app.app.tray_ring import (
 )
 from cursor_usage_app.app.tray_tooltip import build_tray_tooltip
 from cursor_usage_app.app.widget.fetch_worker import load_cache, start_fetch_in_thread
-from cursor_usage_app.app.widget.usage_window import UsageWindow, apply_shell_icon
+from cursor_usage_app.app.widget.usage_window import UsageWindow
 from cursor_usage_app.auth.browser_import import (
     BrowserImportError,
     BrowserImportResult,
@@ -266,9 +266,7 @@ class TrayController(QObject):
             self._store.has_token(),
             mode=mode,
         )
-        shell_icon = render_tray_ring_icon(display)
-        self._tray.setIcon(shell_icon)
-        apply_shell_icon(shell_icon, window=self._window)
+        self._tray.setIcon(render_tray_ring_icon(display))
         self._tray.setToolTip(build_tray_tooltip(envelope, mode=mode))
         self._usage_notifier.process_envelope(envelope, self._show_usage_notification)
 
