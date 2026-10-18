@@ -50,7 +50,6 @@ class UsageSummaryMapper:
         team_on_demand = _pool_from_on_demand(_as_dict(team.get("onDemand")))
 
         on_demand_display = _build_on_demand_display(
-            team_pool=team_pool,
             personal_on_demand=personal_on_demand,
             team_on_demand=team_on_demand,
         )
@@ -69,7 +68,6 @@ class UsageSummaryMapper:
 
 
 def _build_on_demand_display(
-    team_pool: UsagePool | None,
     personal_on_demand: UsagePool | None,
     team_on_demand: UsagePool | None,
 ) -> OnDemandDisplay:
@@ -84,7 +82,7 @@ def _build_on_demand_display(
             on_demand_used_usd=None,
         )
 
-    if team_pool is not None and team_on_demand is not None and team_on_demand.has_limit:
+    if team_on_demand is not None and team_on_demand.has_limit:
         used = team_on_demand.used_usd
         limit = team_on_demand.limit_usd
         progress = _percent(used, limit)
@@ -131,10 +129,13 @@ def _on_demand_card_visible(
 def _pool_from_on_demand(on_demand: dict[str, Any]) -> UsagePool | None:
     if not on_demand:
         return None
-    pool = UsagePool(
-        used_usd=_to_usd_from_api_cents(on_demand.get("used")),
-        limit_usd=_to_usd_from_api_cents(on_demand.get("limit")),
-    )
+    used_usd = _to_usd_from_api_cents(on_demand.get("used"))
+    limit_usd = _to_usd_from_api_cents(on_demand.get("limit"))
+    if (limit_usd is None or limit_usd <= 0) and used_usd is not None:
+        remaining_usd = _to_usd_from_api_cents(on_demand.get("remaining"))
+        if remaining_usd is not None and remaining_usd >= 0:
+            limit_usd = used_usd + remaining_usd
+    pool = UsagePool(used_usd=used_usd, limit_usd=limit_usd)
     if pool.has_limit:
         return pool
     if pool.used_usd is not None:

@@ -32,7 +32,7 @@ Fields read by `UsageSummaryMapper`:
 
 ## On-demand card rules (mapper)
 
-- **Progress %:** `teamUsage.onDemand` used/limit when a team pool exists; otherwise `individualUsage.onDemand` used/limit.
+- **Progress %:** `teamUsage.onDemand` used/limit when team on-demand has a positive limit (or limit derived from `used` + `remaining`); otherwise `individualUsage.onDemand` used/limit.
 - **Hide card:** when both on-demand objects are missing or both limits are zero/null.
 - **Pool label:** Team when team pool present; otherwise Personal.
 

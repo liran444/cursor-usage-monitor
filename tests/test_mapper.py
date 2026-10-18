@@ -53,6 +53,49 @@ def test_personal_pool_from_plan_when_individual_totals_missing() -> None:
     assert display.on_demand_used_usd == 8.5
 
 
+def test_team_on_demand_only_without_team_pool() -> None:
+    snapshot = UsageSummaryMapper.from_api_payload(
+        load_fixture("usage_summary_team_on_demand_only.json"),
+    )
+
+    assert snapshot.team_pool is None
+    assert snapshot.team_on_demand is not None
+    assert snapshot.team_on_demand.used_usd == 55.0
+    assert snapshot.team_on_demand.limit_usd == 200.0
+
+    display = snapshot.on_demand_display
+    assert display.show_card is True
+    assert display.pool_kind == "team"
+    assert display.progress_percent == pytest.approx(27.5)
+    assert display.on_demand_used_usd == 55.0
+
+
+def test_team_on_demand_limit_from_used_and_remaining() -> None:
+    snapshot = UsageSummaryMapper.from_api_payload(
+        {
+            "individualUsage": {
+                "plan": {
+                    "totalPercentUsed": 1.0,
+                    "apiPercentUsed": 0.5,
+                    "autoPercentUsed": 0.5,
+                },
+            },
+            "teamUsage": {
+                "onDemand": {
+                    "enabled": True,
+                    "used": 5500,
+                    "remaining": 14500,
+                },
+            },
+        },
+    )
+
+    assert snapshot.team_on_demand is not None
+    assert snapshot.team_on_demand.limit_usd == 200.0
+    assert snapshot.on_demand_display.show_card is True
+    assert snapshot.on_demand_display.pool_kind == "team"
+
+
 def test_hides_on_demand_when_absent() -> None:
     snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_no_on_demand.json"))
 

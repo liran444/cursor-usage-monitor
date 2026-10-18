@@ -15,6 +15,17 @@ def test_ok_envelope_shows_team_and_on_demand() -> None:
     assert vm.inline_message is None
 
 
+def test_team_on_demand_only_shows_on_demand_not_team_row() -> None:
+    snapshot = UsageSummaryMapper.from_api_payload(
+        load_fixture("usage_summary_team_on_demand_only.json"),
+    )
+    vm = view_model_from_envelope(
+        CacheEnvelopeOk(ok=True, data=snapshot, fetched_at=utc_now_iso()),
+    )
+    assert vm.show_team_row is False
+    assert vm.show_on_demand_card is True
+
+
 def test_personal_only_hides_team_row() -> None:
     snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_personal_only.json"))
     vm = view_model_from_envelope(
