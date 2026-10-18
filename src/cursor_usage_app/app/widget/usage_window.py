@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QCursor, QGuiApplication, QIcon, QKeyEvent, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -12,6 +12,12 @@ from cursor_usage_app.app.shell_branding import icon_for_shell
 from cursor_usage_app.app.tray_ring import TrayRingDisplay, render_tray_ring_icon
 from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
+from cursor_usage_app.app.widget.window_drag import (
+    apply_manual_drag,
+    manual_drag_offset,
+    mouse_target_blocks_window_drag,
+    try_start_window_system_move,
+)
 from cursor_usage_app.auth.session_store import SessionStore
 
 _WIDGET_WIDTH = 310
@@ -57,6 +63,7 @@ class UsageWindow(QWidget):
 
         self._card.ensurePolished()
         self.ensurePolished()
+        self._attach_card_drag_filters()
         self.resize_for_content()
         if auto_center:
             self._center_on_screen()
@@ -95,23 +102,63 @@ class UsageWindow(QWidget):
             return
         super().keyPressEvent(event)
 
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if watched is self._card or self._card.isAncestorOf(watched):
+            if event.type() == QEvent.Type.ChildAdded:
+                child = event.child()
+                if isinstance(child, QWidget):
+                    self._attach_drag_filter(child)
+                return False
+            if isinstance(event, QMouseEvent):
+                if event.type() == QEvent.Type.MouseButtonPress:
+                    return self._handle_drag_mouse_press(event, watched)
+                if event.type() == QEvent.Type.MouseMove:
+                    return self._handle_drag_mouse_move(event)
+                if event.type() == QEvent.Type.MouseButtonRelease:
+                    self._drag_offset = None
+        return super().eventFilter(watched, event)
+
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
+        if self._handle_drag_mouse_press(event, self):
             return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_offset is not None:
-            self.move(event.globalPosition().toPoint() - self._drag_offset)
-            event.accept()
+        if self._handle_drag_mouse_move(event):
             return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         self._drag_offset = None
         super().mouseReleaseEvent(event)
+
+    def _attach_card_drag_filters(self) -> None:
+        self._attach_drag_filter(self._card)
+
+    def _attach_drag_filter(self, widget: QWidget) -> None:
+        widget.installEventFilter(self)
+        for child in widget.findChildren(QWidget):
+            child.installEventFilter(self)
+
+    def _handle_drag_mouse_press(self, event: QMouseEvent, target: QWidget) -> bool:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        if isinstance(target, QWidget) and mouse_target_blocks_window_drag(target):
+            return False
+        if try_start_window_system_move(self, event):
+            self._drag_offset = None
+            return False
+        self._drag_offset = manual_drag_offset(self, event)
+        return False
+
+    def _handle_drag_mouse_move(self, event: QMouseEvent) -> bool:
+        if self._drag_offset is None:
+            return False
+        if not (event.buttons() & Qt.MouseButton.LeftButton):
+            return False
+        apply_manual_drag(self, event, self._drag_offset)
+        event.accept()
+        return True
 
     def _center_on_screen(self) -> None:
         screen = QGuiApplication.primaryScreen()
