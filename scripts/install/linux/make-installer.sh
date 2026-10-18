@@ -23,12 +23,15 @@ cp -a "$DIST/." "$STAGING/payload/"
 cp "$REPO_ROOT/scripts/install/linux/install_gui.sh" "$STAGING/"
 cp "$REPO_ROOT/scripts/install/linux/install_core.sh" "$STAGING/"
 cp "$REPO_ROOT/scripts/install/linux/uninstall.sh" "$STAGING/"
+cp "$REPO_ROOT/scripts/install/linux/install_cleanup.sh" "$STAGING/"
 cp -a "$REPO_ROOT/scripts/install/linux/packages" "$STAGING/"
 cp "$REPO_ROOT/README-USER.txt" "$STAGING/" 2>/dev/null || true
+chmod +x "$STAGING/install_cleanup.sh"
 
 mkdir -p "$RELEASE"
 OUT="$RELEASE/CursorUsageSetup-${VERSION}-linux-x86_64.run"
 
-makeself --notemp --nox11 "$STAGING" "$OUT" "Cursor Usage Setup" ./install_gui.sh
+# Do not use --notemp: it leaves linux-installer-staging in the user's cwd (e.g. Downloads).
+makeself --nox11 --cleanup ./install_cleanup.sh "$STAGING" "$OUT" "Cursor Usage Setup" ./install_gui.sh
 chmod +x "$OUT"
 echo "Created $OUT"
