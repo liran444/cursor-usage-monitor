@@ -213,7 +213,6 @@ class UsageWidget(QWidget):
 
     def _open_dashboard(self) -> None:
         webbrowser.open(_DASHBOARD_URL)
-        self.hide_requested.emit()
 
     def preferred_width(self) -> int:
         if self._needs_browser_login():
