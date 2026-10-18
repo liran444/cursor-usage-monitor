@@ -117,3 +117,18 @@ EOF
   ln -sfn "$INSTALL_ROOT" "${HOME}/.local/share/cursor-usage/current"
   echo "Installed to $INSTALL_ROOT"
 }
+
+cursor_usage_launch_installed_app() {
+  local app="${HOME}/.local/share/cursor-usage/current/cursor-usage"
+  if [[ ! -x "$app" ]]; then
+    echo "Could not find installed app: $app" >&2
+    return 1
+  fi
+  # Detach from the installing shell so the terminal stays usable (no Qt/GIO stderr spam).
+  if command -v setsid >/dev/null 2>&1; then
+    setsid -f -- "$app" </dev/null >/dev/null 2>&1 &
+  else
+    nohup "$app" </dev/null >/dev/null 2>&1 &
+    disown -h >/dev/null 2>&1 || disown >/dev/null 2>&1 || true
+  fi
+}
