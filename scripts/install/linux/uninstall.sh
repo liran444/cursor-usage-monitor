@@ -15,6 +15,7 @@ DESKTOP_DIR="${HOME}/.local/share/applications"
 
 rm -f "$BIN_DIR/cursor-usage"
 rm -f "$DESKTOP_DIR/cursor-usage.desktop"
+rm -f "${HOME}/.local/share/icons/hicolor/256x256/apps/cursor-usage.png"
 rm -rf "$INSTALL_ROOT"
 rm -f "${HOME}/.local/share/cursor-usage/current"
 echo "Cursor Usage removed (system packages were not uninstalled)."

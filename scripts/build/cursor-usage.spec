@@ -103,10 +103,13 @@ coll = COLLECT(
 )
 
 if sys.platform == "darwin":
+    app_icon_icns = ASSETS / "app-icon.icns"
+    if not app_icon_icns.is_file():
+        raise SystemExit(f"macOS app icon missing: {app_icon_icns}")
     app = BUNDLE(
         coll,
         name="Cursor Usage.app",
-        icon=str(ASSETS / "app-icon.icns") if (ASSETS / "app-icon.icns").is_file() else None,
+        icon=str(app_icon_icns),
         bundle_identifier="com.lirandekamhi.cursor-usage",
         info_plist={
             "CFBundleName": "Cursor Usage",

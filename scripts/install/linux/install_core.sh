@@ -102,9 +102,26 @@ cursor_usage_install_app() {
   cp "$SCRIPT_DIR/uninstall.sh" "$INSTALL_ROOT/uninstall.sh"
   chmod +x "$INSTALL_ROOT/uninstall.sh"
 
+  # PyInstaller 6 stores bundled files under _internal/, not next to the executable.
   icon_name="preferences-system"
-  if [[ -f "${INSTALL_ROOT}/assets/app-icon.png" ]]; then
-    icon_name="${INSTALL_ROOT}/assets/app-icon.png"
+  icon_src=""
+  for candidate in \
+    "${INSTALL_ROOT}/_internal/assets/app-icon.png" \
+    "${INSTALL_ROOT}/assets/app-icon.png"
+  do
+    if [[ -f "$candidate" ]]; then
+      icon_src="$candidate"
+      break
+    fi
+  done
+  if [[ -n "$icon_src" ]]; then
+    icon_dir="${HOME}/.local/share/icons/hicolor/256x256/apps"
+    mkdir -p "$icon_dir"
+    cp "$icon_src" "${icon_dir}/cursor-usage.png"
+    icon_name="${icon_dir}/cursor-usage.png"
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+      gtk-update-icon-cache -f -t "${HOME}/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+    fi
   fi
 
   cat > "$DESKTOP_DIR/$APP_ID" <<EOF
