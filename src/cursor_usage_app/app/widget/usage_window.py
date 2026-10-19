@@ -19,7 +19,7 @@ from cursor_usage_app.app.widget.window_drag import (
 )
 from cursor_usage_app.auth.session_store import SessionStore
 
-_WIDGET_WIDTH = 310
+_WIDGET_WIDTH = 320
 _WINDOW_TITLE = "Cursor Usage"
 
 

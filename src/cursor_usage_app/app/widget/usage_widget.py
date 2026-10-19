@@ -61,8 +61,8 @@ from cursor_usage_app.usage_notifications import (
     usage_percent_for_section,
 )
 
-_WIDGET_WIDTH = 310
-_LOGIN_WIDGET_WIDTH = 364
+_WIDGET_WIDTH = 320
+_LOGIN_WIDGET_WIDTH = 380
 _FULL_HEIGHT = 620
 _COMPACT_HEIGHT = 230
 _LOGIN_CARD_MARGINS = (12, 10, 12, 10)
