@@ -1,6 +1,7 @@
 ; Cursor Usage Monitor — Windows installer (Inno Setup 6)
+; AppVersion comes from pyproject.toml via build-installer.ps1 (/DAppVersion=...).
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.0.0-dev"
 #endif
 #ifndef RepoRoot
   #define RepoRoot "..\..\.."

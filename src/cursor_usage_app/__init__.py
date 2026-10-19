@@ -1,3 +1,5 @@
 """Cursor usage monitor application package."""
 
-__version__ = "0.1.6"
+from cursor_usage_app._version import resolve_version
+
+__version__ = resolve_version()

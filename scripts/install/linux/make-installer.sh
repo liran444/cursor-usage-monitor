@@ -25,6 +25,7 @@ cp "$REPO_ROOT/scripts/install/linux/install_core.sh" "$STAGING/"
 cp "$REPO_ROOT/scripts/install/linux/uninstall.sh" "$STAGING/"
 cp "$REPO_ROOT/scripts/install/linux/install_cleanup.sh" "$STAGING/"
 cp -a "$REPO_ROOT/scripts/install/linux/packages" "$STAGING/"
+printf '%s\n' "$VERSION" > "$STAGING/VERSION"
 cp "$REPO_ROOT/README-USER.txt" "$STAGING/" 2>/dev/null || true
 chmod +x "$STAGING/install_cleanup.sh"
 

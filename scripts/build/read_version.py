@@ -1,18 +1,18 @@
-"""Read project version from pyproject.toml (no TOML dependency)."""
+"""Print project version for shell/build scripts (reads pyproject via package helper)."""
 
 from __future__ import annotations
 
-import re
+import sys
 from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / "src"))
+
+from cursor_usage_app._version import resolve_version  # noqa: E402
 
 
 def read_version(repo_root: Path | None = None) -> str:
-    root = repo_root or Path(__file__).resolve().parents[2]
-    text = (root / "pyproject.toml").read_text(encoding="utf-8")
-    match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    if match is None:
-        return "0.0.0"
-    return match.group(1)
+    return resolve_version(repo_root or _REPO_ROOT)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,26 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGES_DIR="$SCRIPT_DIR/packages"
-VERSION="${CURSOR_USAGE_VERSION:-0.1.0}"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
+cursor_usage_resolve_version() {
+  if [[ -n "${CURSOR_USAGE_VERSION:-}" ]]; then
+    printf '%s' "$CURSOR_USAGE_VERSION"
+    return 0
+  fi
+  if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
+    tr -d '\r\n' < "$SCRIPT_DIR/VERSION"
+    return 0
+  fi
+  if [[ -f "$REPO_ROOT/pyproject.toml" ]] && command -v python3 >/dev/null 2>&1; then
+    python3 "$REPO_ROOT/scripts/build/read_version.py"
+    return 0
+  fi
+  echo "Could not determine Cursor Usage version (set CURSOR_USAGE_VERSION)." >&2
+  return 1
+}
+
+VERSION="$(cursor_usage_resolve_version)"
 INSTALL_ROOT="${HOME}/.local/share/cursor-usage/${VERSION}"
 BIN_DIR="${HOME}/.local/bin"
 DESKTOP_DIR="${HOME}/.local/share/applications"

@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 SPECPATH = Path(SPECPATH)
 REPO_ROOT = SPECPATH.parents[1]
@@ -16,6 +16,10 @@ APP_ICON_ICO = ASSETS / "app-icon.ico"
 block_cipher = None
 
 datas = []
+try:
+    datas += copy_metadata("cursor-usage-app")
+except Exception:
+    pass
 if APP_ICON_PNG.is_file():
     datas.append((str(APP_ICON_PNG), "assets"))
 binaries = []

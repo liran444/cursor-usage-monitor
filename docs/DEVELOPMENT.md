@@ -33,7 +33,7 @@ $env:CURSOR_USAGE_TRAY_SMOKE_MS=2000; cursor-usage tray
    - Linux: `scripts/install/linux/build-installer.sh` (requires `makeself`).
    - macOS: `scripts/install/macos/build-installer.sh`.
 
-Version is read from `pyproject.toml` (`project.version`).
+**Version:** bump only `project.version` in `pyproject.toml`. Runtime (`__version__`), PyInstaller, and Windows/macOS/Linux release installers all resolve it via `cursor_usage_app._version` and `scripts/build/read_version.py`.
 
 ## Frozen smoke checklist
 
