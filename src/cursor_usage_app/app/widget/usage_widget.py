@@ -741,10 +741,9 @@ class UsageWidget(QWidget):
         self._sync_tray_display_radios()
         self._sync_theme_radios()
         if at_global is not None:
-            popup.position_near_global(at_global)
+            popup.show_near_point(at_global)
         else:
-            popup.position_below(self._btn_settings)
-        popup.show()
+            popup.show_below_anchor(self._btn_settings)
 
     def _toggle_settings_popup(self) -> None:
         if self._suppress_settings_open:

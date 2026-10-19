@@ -1,9 +1,11 @@
-"""Widget settings as a popup under the gear button."""
+"""Widget settings as a popup under the gear button or beside the tray icon."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QCursor
+import time
+
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt, Signal
+from PySide6.QtGui import QCursor, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -17,6 +19,42 @@ from cursor_usage_app.app.widget.colors import popup_stylesheet
 from cursor_usage_app.settings.app_settings import default_settings_path
 
 _POPUP_WIDTH = 248
+_SHELL_DISMISS_GRACE_S = 0.35
+_SHELL_WINDOW_FLAGS = (
+    Qt.WindowType.Tool
+    | Qt.WindowType.FramelessWindowHint
+    | Qt.WindowType.WindowStaysOnTopHint
+)
+
+
+def popup_top_left(
+    anchor: QPoint,
+    popup_width: int,
+    popup_height: int,
+    available: QRect,
+    margin: int = 8,
+) -> QPoint:
+    """Place a popup on-screen beside a tray or menu-bar anchor.
+
+    Windows trays sit on the bottom edge, so there is room above. GNOME and
+    macOS menus sit on the top edge, so the same "always above" placement
+    lands off-screen. Prefer the side that has room, then clamp.
+    """
+    if (popup_width <= 0) or (popup_height <= 0) or available.isEmpty():
+        return QPoint(available.x(), available.y())
+
+    space_above = anchor.y() - available.y()
+    space_below = (available.y() + available.height()) - anchor.y()
+    if (space_below >= (popup_height + margin)) or (space_below >= space_above):
+        y = anchor.y() + margin
+    else:
+        y = anchor.y() - popup_height - margin
+    x = anchor.x() - popup_width
+    max_x = available.x() + max(0, available.width() - popup_width)
+    max_y = available.y() + max(0, available.height() - popup_height)
+    x = min(max(x, available.x()), max_x)
+    y = min(max(y, available.y()), max_y)
+    return QPoint(x, y)
 
 
 class TraySettingsPopup(QFrame):
@@ -32,6 +70,10 @@ class TraySettingsPopup(QFrame):
     ) -> None:
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self._anchor = anchor
+        self._shell_mode = False
+        self._changing_role = False
+        self._was_active = False
+        self._accept_dismiss_at = 0.0
         self.setObjectName("traySettingsPopup")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.apply_active_palette()
@@ -45,7 +87,7 @@ class TraySettingsPopup(QFrame):
         appearance.setObjectName("sectionTitle")
         layout.addWidget(appearance)
 
-        appearance_hint = QLabel("Match Windows, or choose light or dark for this window.")
+        appearance_hint = QLabel("Match the system, or choose light or dark for this window.")
         appearance_hint.setObjectName("mutedLabel")
         appearance_hint.setWordWrap(True)
         layout.addWidget(appearance_hint)
@@ -107,21 +149,103 @@ class TraySettingsPopup(QFrame):
         y = global_bottom_right.y() + 4
         self.move(x, y)
 
-    def position_near_global(self, point: QPoint) -> None:
-        """Place popup above the point, right-aligned (e.g. tray context menu)."""
+    def show_below_anchor(self, anchor: QWidget) -> None:
+        """Gear-button popup. The host window is on screen, so Qt.Popup can close on outside click."""
+        self._shell_mode = False
+        host = anchor.window() or anchor
+        self._set_window_role(host, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.position_below(anchor)
+        self.show()
+
+    def show_near_point(self, point: QPoint) -> None:
+        """Tray-menu popup. A top-level tool window stays visible on Linux and macOS.
+
+        Qt.Popup parented to the hidden main window is not mapped on X11/Wayland,
+        and placing it above a top menu bar puts it off-screen.
+        """
+        self._shell_mode = True
+        self._was_active = False
+        self._accept_dismiss_at = time.monotonic() + _SHELL_DISMISS_GRACE_S
+        self._set_window_role(None, _SHELL_WINDOW_FLAGS)
+        self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow, True)
         self.adjustSize()
-        x = point.x() - self.width()
-        y = point.y() - self.height() - 8
-        self.move(x, y)
+        self.move(_on_screen_top_left(point, self.width(), self.height()))
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def position_near_global(self, point: QPoint) -> None:
+        """Place the popup on the screen that contains ``point``."""
+        self.adjustSize()
+        self.move(_on_screen_top_left(point, self.width(), self.height()))
+
+    def changeEvent(self, event) -> None:  # noqa: N802
+        super().changeEvent(event)
+        if event.type() != QEvent.Type.ActivationChange:
+            return
+        if (not self._shell_mode) or (not self.isVisible()):
+            self._was_active = self.isActiveWindow()
+            return
+        now_active = self.isActiveWindow()
+        if self._was_active and (not now_active) and (time.monotonic() >= self._accept_dismiss_at):
+            self.hide()
+        self._was_active = now_active
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if self._shell_mode and (event.key() == Qt.Key.Key_Escape):
+            self.hide()
+            return
+        super().keyPressEvent(event)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if (
+            self._shell_mode
+            and self.isVisible()
+            and (time.monotonic() >= self._accept_dismiss_at)
+            and (event.type() == QEvent.Type.MouseButtonPress)
+            and isinstance(event, QMouseEvent)
+        ):
+            if not self.frameGeometry().contains(event.globalPosition().toPoint()):
+                self.hide()
+        return False
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if not self._shell_mode:
+            return
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
     def hideEvent(self, event) -> None:  # noqa: N802
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
         super().hideEvent(event)
+        if self._changing_role:
+            return
         anchor = self._anchor
         if anchor is None:
             return
         local = anchor.mapFromGlobal(QCursor.pos())
         if anchor.rect().contains(local):
             self.dismissed_via_anchor.emit()
+
+    def _set_window_role(self, parent: QWidget | None, flags: Qt.WindowType) -> None:
+        self._changing_role = True
+        try:
+            self.setParent(parent, flags)
+        finally:
+            self._changing_role = False
+
+
+def _on_screen_top_left(point: QPoint, popup_width: int, popup_height: int) -> QPoint:
+    screen = QGuiApplication.screenAt(point)
+    if screen is None:
+        screen = QGuiApplication.primaryScreen()
+    if screen is None:
+        return QPoint(point.x(), point.y())
+    return popup_top_left(point, popup_width, popup_height, screen.availableGeometry())
 
 
 def _section_rule() -> QWidget:

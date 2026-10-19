@@ -7,7 +7,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QPoint, QTimer, Signal
 from PySide6.QtGui import QAction, QCursor
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -218,11 +218,22 @@ class TrayController(QObject):
         self._reveal_widget()
 
     def _open_settings(self) -> None:
-        menu_pos = QCursor.pos()
+        anchor = self._tray_settings_anchor()
+        menu = self._tray.contextMenu()
+        if menu is not None:
+            menu.hide()
+        # Let the shell menu finish closing. A popup shown inside this signal
+        # is discarded on Linux (StatusNotifier) and macOS (menu-bar item).
         QTimer.singleShot(
             0,
-            lambda: self._window.widget().open_settings_panel(at_global=menu_pos),
+            lambda: self._window.widget().open_settings_panel(at_global=anchor),
         )
+
+    def _tray_settings_anchor(self) -> QPoint:
+        tray_rect = self._tray.geometry()
+        if tray_rect.isValid() and (tray_rect.width() > 0) and (tray_rect.height() > 0):
+            return tray_rect.center()
+        return QCursor.pos()
 
     def _open_set_token(self) -> None:
         self._reveal_widget()
