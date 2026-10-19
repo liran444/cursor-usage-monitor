@@ -42,9 +42,12 @@ class UsageWindow(QWidget):
     ) -> None:
         super().__init__()
         self._drag_offset = None
+        # WindowMinimizeButtonHint keeps the window manager minimize action
+        # (Windows taskbar, macOS Dock, Linux panel) without drawing a title bar.
         self.setWindowFlags(
             Qt.WindowType.Window
             | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowMinimizeButtonHint
         )
         self.setWindowTitle(_WINDOW_TITLE)
         apply_shell_icon(load_app_icon(), window=self)

@@ -36,7 +36,11 @@ def qapp():
 def test_usage_window_is_normal_frameless_shell_window(qapp) -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     window = UsageWindow(auto_center=False)
-    expected = Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
+    expected = (
+        Qt.WindowType.Window
+        | Qt.WindowType.FramelessWindowHint
+        | Qt.WindowType.WindowMinimizeButtonHint
+    )
     assert window.windowFlags() == expected
     assert window.windowTitle() == "Cursor Usage"
     assert not window.windowIcon().isNull()
