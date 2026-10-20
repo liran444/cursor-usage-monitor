@@ -42,6 +42,10 @@ Name: "startup"; Description: "Start Cursor Usage when I sign in"; GroupDescript
 
 [Files]
 Source: "{#DistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#RepoRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\docs\PRIVACY.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\docs\DISCLAIMER.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "redist\vc_redist.x64.exe"; Flags: dontcopy
 
 [Icons]

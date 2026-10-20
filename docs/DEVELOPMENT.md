@@ -43,10 +43,23 @@ After building `dist/cursor-usage/` or installing from `release/`:
 - [ ] Open widget from tray; gear icons (qt-material-icons) render.
 - [ ] Windows: taskbar shows app icon, not Python.
 
-## CI
+## CI and publishing
 
 `.github/workflows/release-build.yml` builds all three installers on tag push `v*` or manual dispatch.
 
-## Qt license
+On **tag push** (`v*`):
 
-This app uses PySide6 (Qt). Qt is available under LGPL. See [Qt licensing](https://www.qt.io/licensing/).
+1. Windows, macOS, and Linux jobs upload build artifacts.
+2. The `release` job creates a **GitHub Release** for that tag and attaches all three installers plus `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
+**Release checklist**
+
+1. Bump `project.version` in `pyproject.toml`.
+2. Commit, tag `v{version}` (e.g. `v0.1.9`), push the tag.
+3. Wait for the workflow; installers appear under **Releases** on GitHub.
+
+Manual **workflow_dispatch** still builds artifacts but does **not** create a GitHub Release (no tag ref).
+
+## Qt and binary distribution
+
+This app uses PySide6 (Qt) under LGPL. Installers bundle Qt and other libraries — see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) and [Qt licensing](https://www.qt.io/licensing/).

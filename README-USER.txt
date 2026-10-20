@@ -1,7 +1,8 @@
-Cursor Usage Monitor
-====================
+Cursor Usage Monitor (unofficial — not affiliated with Cursor or Anysphere)
+============================================================================
 
 This app shows your Cursor usage in the system tray and a small desktop widget.
+It is free software; the maintainer does not collect your data.
 
 INSTALL (quick)
 ---------------
@@ -11,12 +12,23 @@ Linux:   Run CursorUsageSetup-....run (allow executing if your browser saved it 
 
 FIRST RUN
 ---------
-If you are logged in to cursor.com in Chrome, Edge, Brave, or Firefox, the app may import your session automatically.
-Otherwise use the tray menu: Set token... (see docs/AUTH.md in the install folder or project site).
+If you are logged in to cursor.com in a supported browser, the app may read that
+browser's cursor.com session cookie locally and save it on this PC (see PRIVACY.md).
+You can also use the tray menu: Set token...
+
+PRIVACY AND DISCLAIMER
+----------------------
+PRIVACY.md    — what is stored on your PC and what is sent to cursor.com only.
+DISCLAIMER.md — no warranty; unofficial tool; use at your own risk.
+LICENSE       — MIT (application source).
+THIRD_PARTY_NOTICES.md — Qt and other bundled libraries.
+
+(On Windows these files are in the install folder. On Linux they are in the .run
+ archive. On macOS see the GitHub Release or project repository.)
 
 SECURITY
 --------
-Your session token is like a password. Do not share it.
+Your session token is like a password. Do not share it or paste it into bug reports.
 
 UNINSTALL
 ---------

@@ -2,6 +2,9 @@
 
 Cursor Usage Monitor calls `GET https://cursor.com/api/usage-summary` using the browser session cookie **`WorkosCursorSessionToken`**. The app stores this value locally so it can refresh usage in the background.
 
+For privacy (what is stored, browser cookie import, polling) and disclaimers, see
+[PRIVACY.md](PRIVACY.md) and [DISCLAIMER.md](DISCLAIMER.md).
+
 ## Manual token (recommended fallback)
 
 1. Log in at [cursor.com](https://cursor.com) in any browser you use (Chrome, Edge, Firefox, Safari, Brave, Opera, etc.).
