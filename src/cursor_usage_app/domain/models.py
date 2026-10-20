@@ -12,6 +12,21 @@ class PlanPercents:
     api_percent_used: float | None
     auto_percent_used: float | None
 
+    def with_inferred_total_if_missing(self) -> PlanPercents:
+        """When the API omits totalPercentUsed but sends API/AUTO breakdown, infer total."""
+        if self.total_percent_used is not None:
+            return self
+        if self.api_percent_used is None and self.auto_percent_used is None:
+            return self
+        api = self.api_percent_used if self.api_percent_used is not None else 0.0
+        auto = self.auto_percent_used if self.auto_percent_used is not None else 0.0
+        inferred = min(100.0, max(0.0, api + auto))
+        return PlanPercents(
+            total_percent_used=inferred,
+            api_percent_used=self.api_percent_used,
+            auto_percent_used=self.auto_percent_used,
+        )
+
 
 @dataclass(frozen=True)
 class UsagePool:
@@ -66,7 +81,7 @@ class UsageSnapshot:
                 total_percent_used=plan.get("total_percent_used"),
                 api_percent_used=plan.get("api_percent_used"),
                 auto_percent_used=plan.get("auto_percent_used"),
-            ),
+            ).with_inferred_total_if_missing(),
             team_pool=(
                 UsagePool(
                     used_usd=team_pool.get("used_usd"),

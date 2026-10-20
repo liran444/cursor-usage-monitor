@@ -53,6 +53,7 @@ class SegmentedTotalGauge(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._total_percent: float | None = None
         self._segments = compute_plan_arc_segments(None, None, None)
         self.setFixedSize(_GAUGE_SIZE, _GAUGE_SIZE)
 
@@ -62,6 +63,7 @@ class SegmentedTotalGauge(QWidget):
         api: float | None,
         auto: float | None,
     ) -> None:
+        self._total_percent = total
         self._segments = compute_plan_arc_segments(total, api, auto)
         self.update()
 
@@ -71,8 +73,9 @@ class SegmentedTotalGauge(QWidget):
         rect = _ring_rect(self.width(), self.height(), _RING_WIDTH)
         _draw_track(painter, rect, _RING_WIDTH)
         segments = self._segments
+        center_value = _total_gauge_center_label(self._total_percent, segments.total_span)
         if segments.total_span <= 0.0:
-            _draw_center_stack(painter, self.rect(), "TOTAL", "—")
+            _draw_center_stack(painter, self.rect(), "TOTAL", center_value)
             return
 
         palette = active_palette()
@@ -88,7 +91,7 @@ class SegmentedTotalGauge(QWidget):
             auto_start = start_deg - (segments.api_span * 360.0 / 100.0)
             _draw_arc(painter, rect, auto_start, segments.auto_span, QColor(palette.violet), _RING_WIDTH)
 
-        _draw_center_stack(painter, self.rect(), "TOTAL", f"{round(segments.total_span)}%")
+        _draw_center_stack(painter, self.rect(), "TOTAL", center_value)
 
 
 class MiniTotalGauge(QWidget):
@@ -121,6 +124,14 @@ class MiniTotalGauge(QWidget):
         single_auto = (not segments.degraded_single_color) and (segments.api_span <= 0.0)
         color = QColor(palette.violet if single_auto else palette.api_gauge)
         _draw_arc(painter, rect, 90.0, segments.total_span, color, width)
+
+
+def _total_gauge_center_label(total_percent: float | None, total_span: float) -> str:
+    if total_percent is None:
+        return "—"
+    if total_span <= 0.0:
+        return "0%"
+    return f"{round(total_span)}%"
 
 
 def _ring_rect(width: int, height: int, stroke: float) -> QRectF:

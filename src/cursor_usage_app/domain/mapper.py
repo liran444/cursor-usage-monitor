@@ -35,7 +35,7 @@ class UsageSummaryMapper:
             total_percent_used=_to_float(plan.get("totalPercentUsed")),
             api_percent_used=_to_float(plan.get("apiPercentUsed")),
             auto_percent_used=_to_float(plan.get("autoPercentUsed")),
-        )
+        ).with_inferred_total_if_missing()
 
         team_pool: UsagePool | None = None
         if team:
