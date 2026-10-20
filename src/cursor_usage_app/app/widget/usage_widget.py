@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import (
+    QAbstractAnimation,
+    QEasingCurve,
+    QEvent,
+    QPoint,
+    QSize,
+    Qt,
+    QTimer,
+    QVariantAnimation,
+    Signal,
+)
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -34,6 +46,7 @@ from cursor_usage_app.app.widget.gauge_widget import DonutGauge, MiniTotalGauge,
 from cursor_usage_app.app.widget.material_icons import material_icon, material_pixmap
 from cursor_usage_app.app.widget.progress_bar import HorizontalBar
 from cursor_usage_app.app.widget.opacity_fade import OpacityFader
+from cursor_usage_app.app.widget.reveal_clip import TopClip, TrailingSlot
 from cursor_usage_app.app.widget.section_notify_bell import SectionNotifyBell
 from cursor_usage_app.app.widget.tray_settings_popup import TraySettingsPopup
 from cursor_usage_app.app.widget.view_model import (
@@ -79,9 +92,34 @@ _MANUAL_REFRESH_COOLDOWN_MS = 5000
 _REFRESH_DIM_OPACITY = 0.42
 _DATA_DIM_OPACITY = 0.35
 _OPACITY_FADE_MS = 300
+_LAYOUT_TRANSITION_MS = 420
+_LAYOUT_TRANSITION_MIN_MS = 160
+_ACTION_BUTTON_GAP = 6
+_STATIC_ANIM_SECTION_ATTRS = (
+    "_personal_card",
+    "_loading_card",
+    "_login_card",
+    "_token_panel",
+    "_btn_token",
+    "_rule_before_actions",
+    "_action_row",
+)
 _BUSY_SPINNER_INTERVAL_MS = 70
 _CARD_SECTION_INSET_MARGINS = (8, 10, 8, 10)
 _SECTION_INSET_MARGINS = (8, 2, 8, 2)
+_QT_MAX = 16777215
+
+
+@dataclass(frozen=True)
+class _LayoutMetrics:
+    """Heights captured once per transition so frames do not re-measure the tree."""
+
+    content_width: int
+    details_h: int
+    compact_h: int
+    meta_h: int
+    expanded_height: int
+    compact_height: int
 
 
 class UsageWidget(QWidget):
@@ -141,6 +179,17 @@ class UsageWidget(QWidget):
         self._refresh_cooldown_timer.setSingleShot(True)
         self._refresh_cooldown_timer.timeout.connect(self._end_manual_refresh_cooldown)
         self._opacity_fader = OpacityFader(_OPACITY_FADE_MS)
+        self._layout_progress = 0.0
+        self._layout_anim: QVariantAnimation | None = None
+        self._layout_retargeting = False
+        self._applying_layout = False
+        self._toggle_width_locked = False
+        self._chevron_degrees = 0.0
+        self._chevron_base: QPixmap | None = None
+        self._chevron_base_key: str | None = None
+        self._layout_metrics: _LayoutMetrics | None = None
+        self._transition_followers: list[tuple[QWidget, int]] = []
+        self._summary_rest_height = 0
         self._notify_bells_by_section: dict[str, list[SectionNotifyBell]] = {}
         self._system_theme_listener_hooked = False
 
@@ -154,16 +203,33 @@ class UsageWidget(QWidget):
         return self._compact
 
     def set_compact(self, compact: bool) -> None:
-        if self._compact == compact:
+        """Snap to a layout. The collapse button animates; callers that set state do not."""
+        at_rest = abs(self._layout_progress - (1.0 if compact else 0.0)) < 0.001
+        if self._compact == compact and at_rest and not self._layout_transition_running():
             return
+        self._stop_layout_transition()
+        self._thaw_layout_after_transition()
+        self._layout_metrics = None
+        self._release_static_root_sections()
         self._compact = compact
+        self._layout_progress = 1.0 if compact else 0.0
         self._apply_compact_visibility()
         self._update_toggle_button()
         self.compact_changed.emit(compact)
         self._resize_to_mode()
 
     def toggle_compact(self) -> None:
-        self.set_compact(not self._compact)
+        target = not self._compact
+        if (not self.isVisible()) or self._prefers_reduced_motion():
+            self.set_compact(target)
+            return
+        self._lock_toggle_button_width()
+        self._compact = target
+        self._update_toggle_button()
+        if self._layout_metrics is None:
+            self._refresh_layout_metrics()
+        self._freeze_layout_for_transition()
+        self._start_layout_transition()
 
     def reload_from_cache(self) -> None:
         envelope = load_cache(self._cache_path)
@@ -220,6 +286,8 @@ class UsageWidget(QWidget):
         return _WIDGET_WIDTH
 
     def preferred_height(self) -> int:
+        if self._layout_metrics is not None:
+            return self._animated_content_height()
         layout = self.layout()
         if layout is None:
             return _COMPACT_HEIGHT if self._compact else _FULL_HEIGHT
@@ -228,6 +296,26 @@ class UsageWidget(QWidget):
         layout.invalidate()
         layout.activate()
         return layout.sizeHint().height()
+
+    def _animated_content_height(self) -> int:
+        """Linear height between the two measured rest states. No layout pass."""
+        metrics = self._layout_metrics
+        if metrics is None:
+            return self.preferred_height()
+        progress = self._layout_progress
+        if progress <= 0.0:
+            return metrics.expanded_height
+        if progress >= 1.0:
+            return metrics.compact_height
+        span = metrics.compact_height - metrics.expanded_height
+        return int(round(metrics.expanded_height + (span * progress)))
+
+    def _layout_height_after_clips(self) -> int:
+        """Height implied by clip widgets only; skips label pinning used at rest."""
+        root = self._root_layout
+        root.invalidate()
+        root.activate()
+        return root.sizeHint().height()
 
     def _pin_wrapped_labels(self) -> None:
         """Keep wrapped labels at text height so leftover window space cannot open gaps inside cards."""
@@ -406,7 +494,6 @@ class UsageWidget(QWidget):
         root.addWidget(self._personal_card)
 
         self._rule_before_team = _section_rule()
-        root.addWidget(self._rule_before_team)
 
         # Compact mini total
         self._compact_total_row = QWidget()
@@ -423,7 +510,6 @@ class UsageWidget(QWidget):
         self._compact_total_pct = QLabel()
         self._compact_total_pct.setObjectName("amountLabel")
         compact_layout.addWidget(self._compact_total_pct)
-        root.addWidget(self._compact_total_row)
 
         # Team
         self._team_block = QWidget()
@@ -453,10 +539,8 @@ class UsageWidget(QWidget):
         team_row.addStretch()
         team_row.addWidget(self._team_pct)
         team_layout.addLayout(team_row)
-        root.addWidget(self._team_block)
 
         self._rule_before_gauges = _section_rule()
-        root.addWidget(self._rule_before_gauges)
 
         # Gauges
         self._gauge_block = QWidget()
@@ -486,10 +570,8 @@ class UsageWidget(QWidget):
         gauge_row.addWidget(self._auto_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
         gauge_row.addStretch(1)
         gauge_outer.addLayout(gauge_row)
-        root.addWidget(self._gauge_block)
 
         self._rule_before_on_demand = _section_rule()
-        root.addWidget(self._rule_before_on_demand)
 
         # On demand card
         self._on_demand_card = QFrame()
@@ -517,7 +599,6 @@ class UsageWidget(QWidget):
         od_layout.addLayout(od_usage_row)
         self._od_bar = HorizontalBar(QColor(active_palette().coral))
         od_layout.addWidget(self._od_bar)
-        root.addWidget(self._on_demand_card)
 
         self._rule_before_actions = _section_rule()
         root.addWidget(self._rule_before_actions)
@@ -578,16 +659,21 @@ class UsageWidget(QWidget):
         self._btn_dashboard.setIconSize(QSize(18, 18))
 
         self._action_row = QWidget()
+        self._action_row.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         action_layout = QHBoxLayout(self._action_row)
         action_layout.setContentsMargins(*_SECTION_INSET_MARGINS)
-        action_layout.setSpacing(6)
+        action_layout.setSpacing(0)
         action_layout.addWidget(self._btn_toggle)
+        action_layout.addSpacing(_ACTION_BUTTON_GAP)
         action_layout.addWidget(self._btn_refresh, 1)
-        action_layout.addWidget(self._btn_dashboard, 1)
-        root.addWidget(self._action_row)
+        self._dashboard_gap = QWidget()
+        self._dashboard_gap.setFixedSize(_ACTION_BUTTON_GAP, 1)
+        action_layout.addWidget(self._dashboard_gap)
+        self._dashboard_slot = TrailingSlot(leading=0)
+        self._dashboard_slot.set_child(self._btn_dashboard)
+        action_layout.addWidget(self._dashboard_slot, 1)
 
         self._rule_before_metadata = _section_rule()
-        root.addWidget(self._rule_before_metadata)
 
         self._btn_refresh.clicked.connect(self._on_manual_refresh_clicked)
         self._btn_token.clicked.connect(self.show_token_editor)
@@ -613,12 +699,60 @@ class UsageWidget(QWidget):
         for label in (self._meta_fetched, self._meta_reset):
             label.setObjectName("metaLine")
             meta_layout.addWidget(label)
-        root.addWidget(self._metadata_block)
 
+        self._mount_collapsible_sections()
         self._apply_compact_visibility()
         self._apply_active_theme()
         self._sync_notify_bells_from_settings()
         self._resize_to_mode()
+
+    def _mount_collapsible_sections(self) -> None:
+        """Stack detail and summary in one clip so neither pushes the other aside."""
+        root = self._root_layout
+        gap = root.spacing()
+
+        self._details_panel = QWidget()
+        details_layout = QVBoxLayout(self._details_panel)
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setSpacing(gap)
+        details_layout.addWidget(self._rule_before_team)
+        details_layout.addWidget(self._team_block)
+        details_layout.addWidget(self._rule_before_gauges)
+        details_layout.addWidget(self._gauge_block)
+        details_layout.addWidget(self._rule_before_on_demand)
+        details_layout.addWidget(self._on_demand_card)
+
+        self._compact_panel = QWidget()
+        compact_host = QVBoxLayout(self._compact_panel)
+        compact_host.setContentsMargins(0, 0, 0, 0)
+        compact_host.setSpacing(0)
+        compact_host.addWidget(self._compact_total_row)
+
+        self._summary_viewport = TopClip()
+        self._details_panel.setParent(self._summary_viewport)
+        self._compact_panel.setParent(self._summary_viewport)
+        root.insertWidget(root.indexOf(self._rule_before_actions), self._summary_viewport)
+
+        self._metadata_panel = QWidget()
+        metadata_layout = QVBoxLayout(self._metadata_panel)
+        metadata_layout.setContentsMargins(0, 0, 0, 0)
+        metadata_layout.setSpacing(0)
+        metadata_layout.addSpacing(gap)
+        metadata_layout.addWidget(self._rule_before_metadata)
+        metadata_layout.addSpacing(gap)
+        metadata_layout.addWidget(self._metadata_block)
+
+        self._metadata_viewport = TopClip()
+        self._metadata_panel.setParent(self._metadata_viewport)
+
+        self._mode_tail = QWidget()
+        self._mode_tail.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        tail_layout = QVBoxLayout(self._mode_tail)
+        tail_layout.setContentsMargins(0, 0, 0, 0)
+        tail_layout.setSpacing(0)
+        tail_layout.addWidget(self._action_row)
+        tail_layout.addWidget(self._metadata_viewport)
+        root.addWidget(self._mode_tail)
 
     def _make_notify_bell(self, section_id: str) -> SectionNotifyBell:
         bell = SectionNotifyBell(section_id, self)
@@ -912,8 +1046,6 @@ class UsageWidget(QWidget):
         elif vm.phase == "error":
             self._clear_data_fields()
 
-        self._team_block.setVisible(vm.show_team_row and not self._compact)
-        self._on_demand_card.setVisible(vm.show_on_demand_card and not self._compact)
         self._apply_section_visibility()
         self._resize_to_mode()
 
@@ -1023,7 +1155,6 @@ class UsageWidget(QWidget):
 
     def _apply_section_visibility(self) -> None:
         login = self._needs_browser_login()
-        compact = self._compact
         empty_loading = self._empty_loading()
         show_data = not login and not empty_loading
         self._loading_card.setVisible(empty_loading)
@@ -1031,20 +1162,21 @@ class UsageWidget(QWidget):
         if login:
             self._resize_to_mode()
         self._personal_card.setVisible(show_data)
-        self._compact_total_row.setVisible(compact and show_data)
-        self._team_block.setVisible(show_data and not compact and self._view_model.show_team_row)
-        self._gauge_block.setVisible(show_data and not compact)
-        self._on_demand_card.setVisible(
-            show_data and not compact and self._view_model.show_on_demand_card
-        )
-        self._metadata_block.setVisible(show_data and not compact)
+        # Detail blocks stay in the clip. Compact mode hides the clip, not the blocks,
+        # so expanding does not restack them mid-animation.
+        self._compact_total_row.setVisible(show_data)
+        self._team_block.setVisible(show_data and self._view_model.show_team_row)
+        self._gauge_block.setVisible(show_data)
+        self._on_demand_card.setVisible(show_data and self._view_model.show_on_demand_card)
+        self._metadata_block.setVisible(show_data)
         self._action_row.setVisible(not login)
+        self._mode_tail.setVisible(not login)
         self._btn_settings.setVisible(not login)
         self._btn_token.setVisible(login)
         if login or empty_loading:
             self._hide_settings_popup()
-        self._btn_dashboard.setVisible(not login and not compact)
         self._sync_section_rules()
+        self._apply_layout_progress(self._layout_progress)
         if show_data and self.isVisible():
             self._schedule_refresh_metrics_lock()
 
@@ -1057,12 +1189,11 @@ class UsageWidget(QWidget):
             self._rule_before_actions.setVisible(True)
             self._rule_before_metadata.setVisible(False)
             return
-        compact = self._compact
-        self._rule_before_team.setVisible(not self._team_block.isHidden())
-        self._rule_before_gauges.setVisible(not compact)
-        self._rule_before_on_demand.setVisible(not self._on_demand_card.isHidden())
+        self._rule_before_team.setVisible(self._view_model.show_team_row)
+        self._rule_before_gauges.setVisible(True)
+        self._rule_before_on_demand.setVisible(self._view_model.show_on_demand_card)
         self._rule_before_actions.setVisible(True)
-        self._rule_before_metadata.setVisible(not compact)
+        self._rule_before_metadata.setVisible(True)
 
     def _start_browser_login(self) -> None:
         import time
@@ -1222,15 +1353,379 @@ class UsageWidget(QWidget):
         self._btn_login.setIcon(icon)
 
     def _update_toggle_button(self) -> None:
-        icon_color = active_palette().toggle_text
         if self._compact:
-            self._btn_toggle.setIcon(material_icon("expand_more", icon_color))
             self._btn_toggle.setText("Expand")
             self._btn_toggle.setToolTip("Show full details")
         else:
-            self._btn_toggle.setIcon(material_icon("expand_less", icon_color))
             self._btn_toggle.setText("Collapse")
             self._btn_toggle.setToolTip("Show less detail")
+        self._set_chevron_angle(180.0 * self._layout_progress)
+
+    def _chevron_base_pixmap(self) -> QPixmap:
+        color = active_palette().toggle_text
+        key = str(color)
+        if self._chevron_base is None or self._chevron_base_key != key:
+            self._chevron_base = material_pixmap("expand_less", color, size=18)
+            self._chevron_base_key = key
+        return self._chevron_base
+
+    def _set_chevron_angle(self, degrees: float) -> None:
+        """Rotate one chevron so Collapse and Expand share a single glyph."""
+        self._chevron_degrees = degrees
+        size = 18
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.translate(size / 2, size / 2)
+        painter.rotate(degrees)
+        painter.translate(-size / 2, -size / 2)
+        painter.drawPixmap(0, 0, self._chevron_base_pixmap())
+        painter.end()
+        self._btn_toggle.setIcon(QIcon(canvas))
+        self._btn_toggle.setIconSize(QSize(size, size))
+
+    def _prefers_reduced_motion(self) -> bool:
+        app = QGuiApplication.instance()
+        if app is None:
+            return False
+        try:
+            preference = app.styleHints().motionPreference()
+        except AttributeError:
+            return False
+        return preference == Qt.MotionPreference.ReducedMotion
+
+    def _layout_transition_running(self) -> bool:
+        anim = self._layout_anim
+        if anim is None:
+            return False
+        return anim.state() == QAbstractAnimation.State.Running
+
+    def _stop_layout_transition(self) -> None:
+        anim = self._layout_anim
+        if anim is None:
+            return
+        self._layout_retargeting = True
+        anim.stop()
+        self._layout_retargeting = False
+
+    def _start_layout_transition(self) -> None:
+        """InOutSine spreads the travel so a 60fps frame never jumps."""
+        target = 1.0 if self._compact else 0.0
+        start = self._layout_progress
+        if abs(start - target) < 0.001:
+            self._layout_progress = target
+            self._apply_layout_progress(target)
+            return
+        self._dashboard_slot.note_span()
+        distance = abs(target - start)
+        duration = max(_LAYOUT_TRANSITION_MIN_MS, int(round(_LAYOUT_TRANSITION_MS * distance)))
+        if self._layout_anim is None:
+            anim = QVariantAnimation(self)
+            anim.valueChanged.connect(self._apply_layout_progress)
+            anim.finished.connect(self._on_layout_transition_finished)
+            self._layout_anim = anim
+        else:
+            anim = self._layout_anim
+            self._layout_retargeting = True
+            anim.stop()
+            self._layout_retargeting = False
+        anim.setStartValue(start)
+        anim.setEndValue(target)
+        anim.setDuration(duration)
+        anim.setEasingCurve(QEasingCurve.Type.InOutSine)
+        anim.start()
+
+    def _on_layout_transition_finished(self) -> None:
+        if self._layout_retargeting:
+            return
+        target = 1.0 if self._compact else 0.0
+        if abs(self._layout_progress - target) > 0.02:
+            return
+        metrics = self._layout_metrics
+        rest_height: int | None = None
+        if metrics is not None:
+            rest_height = metrics.expanded_height if target <= 0.0 else metrics.compact_height
+        self._thaw_layout_after_transition()
+        self._layout_metrics = None
+        self._release_static_root_sections()
+        self._layout_progress = target
+        self._apply_layout_progress(target)
+        if rest_height is not None:
+            width = self.preferred_width()
+            self.setFixedSize(width, rest_height)
+            window = self.window()
+            if window is not None and hasattr(window, "resize_for_content"):
+                if getattr(window, "_card", None) is not None:
+                    window.resize_for_content()
+        self.compact_changed.emit(self._compact)
+        self._resize_to_mode()
+
+    def _apply_layout_progress(self, value: object) -> None:
+        if self._applying_layout:
+            return
+        progress = min(1.0, max(0.0, float(value)))
+        if progress >= 0.9995:
+            progress = 1.0
+        if progress <= 0.0005:
+            progress = 0.0
+        self._layout_progress = progress
+        self._applying_layout = True
+        try:
+            self._place_collapsible_panels(progress)
+            self._set_chevron_angle(180.0 * progress)
+            self._resize_to_mode()
+        finally:
+            self._applying_layout = False
+
+    def _freeze_layout_for_transition(self) -> None:
+        """Stop the root layout from reflowing on every frame.
+
+        Sections under the summary keep the y they had at rest and slide by the
+        same amount the summary clip grows or shrinks.
+        """
+        root = self._root_layout
+        if root is None or not root.isEnabled():
+            return
+        summary = self._summary_viewport
+        self._summary_rest_height = summary.height()
+        followers: list[tuple[QWidget, int]] = []
+        for index in range(root.count()):
+            widget = root.itemAt(index).widget()
+            if widget is None or widget is summary or widget.isHidden():
+                continue
+            if widget.y() > summary.y():
+                followers.append((widget, widget.y()))
+        self._transition_followers = followers
+        root.setEnabled(False)
+
+    def _thaw_layout_after_transition(self) -> None:
+        self._transition_followers = []
+        root = getattr(self, "_root_layout", None)
+        if root is not None and not root.isEnabled():
+            root.setEnabled(True)
+
+    def _slide_transition_followers(self, summary_height: int) -> None:
+        if not self._transition_followers:
+            return
+        delta = summary_height - self._summary_rest_height
+        for widget, rest_y in self._transition_followers:
+            next_y = rest_y + delta
+            if widget.y() != next_y:
+                widget.move(widget.x(), next_y)
+
+    def _section_content_width(self) -> int:
+        laid_out = self._summary_viewport.width()
+        if laid_out > 1:
+            return laid_out
+        left, _, right, _ = self._root_layout.getContentsMargins()
+        return max(1, self.width() - left - right)
+
+    def _pin_static_root_sections(self) -> None:
+        """Keep header rows from absorbing slack while the window height animates."""
+        for attr in _STATIC_ANIM_SECTION_ATTRS:
+            widget = getattr(self, attr)
+            if widget.isHidden():
+                self._release_widget_vertical_lock(widget)
+                continue
+            widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            height = widget.height()
+            if height <= 0:
+                height = widget.sizeHint().height()
+            if height > 0:
+                widget.setFixedHeight(height)
+
+    def _release_static_root_sections(self) -> None:
+        for attr in _STATIC_ANIM_SECTION_ATTRS:
+            self._release_widget_vertical_lock(getattr(self, attr))
+        self._release_widget_vertical_lock(self._mode_tail)
+
+    def _release_widget_vertical_lock(self, widget: QWidget) -> None:
+        widget.setMinimumHeight(0)
+        widget.setMaximumHeight(_QT_MAX)
+        widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+
+    def _measure_panel_height(self, panel: QWidget, width: int) -> int:
+        panel.setMinimumHeight(0)
+        panel.setMaximumHeight(_QT_MAX)
+        if panel.width() != width:
+            panel.setFixedWidth(width)
+        layout = panel.layout()
+        if layout is None:
+            height = max(0, panel.sizeHint().height())
+        else:
+            layout.invalidate()
+            layout.activate()
+            height = max(0, layout.sizeHint().height())
+        panel.setFixedHeight(height)
+        if panel.pos() != QPoint(0, 0):
+            panel.move(0, 0)
+        return height
+
+    def _refresh_layout_metrics(self) -> None:
+        login = self._needs_browser_login()
+        show_data = (not login) and (not self._empty_loading())
+        if not show_data:
+            self._layout_metrics = None
+            self._release_static_root_sections()
+            return
+        self._pin_static_root_sections()
+        width = self._section_content_width()
+        details_h = self._measure_panel_height(self._details_panel, width)
+        compact_h = self._measure_panel_height(self._compact_panel, width)
+        meta_h = self._measure_panel_height(self._metadata_panel, width)
+        saved_progress = self._layout_progress
+        expanded_height = self._layout_height_for_clip_state(0.0, details_h, compact_h, meta_h)
+        compact_height = self._layout_height_for_clip_state(1.0, details_h, compact_h, meta_h)
+        self._layout_progress = saved_progress
+        self._apply_clip_geometry(saved_progress, details_h, compact_h, meta_h)
+        # Measuring the compact state moves every section. Put them back before
+        # the animation records its starting positions, or collapse runs from
+        # the wrong place and snaps at the end.
+        root = self._root_layout
+        root.invalidate()
+        root.activate()
+        self._layout_metrics = _LayoutMetrics(
+            content_width=width,
+            details_h=details_h,
+            compact_h=compact_h,
+            meta_h=meta_h,
+            expanded_height=expanded_height,
+            compact_height=compact_height,
+        )
+
+    def _layout_height_for_clip_state(
+        self,
+        progress: float,
+        details_h: int,
+        compact_h: int,
+        meta_h: int,
+    ) -> int:
+        self._apply_clip_geometry(progress, details_h, compact_h, meta_h)
+        root = self._root_layout
+        root.invalidate()
+        root.activate()
+        return root.sizeHint().height()
+
+    def _apply_clip_geometry(
+        self,
+        progress: float,
+        details_h: int,
+        compact_h: int,
+        meta_h: int,
+    ) -> None:
+        summary_h = int(round(details_h + ((compact_h - details_h) * progress)))
+        self._summary_viewport.set_shown_height(summary_h)
+        meta_shown = int(round(meta_h * (1.0 - progress)))
+        self._metadata_viewport.set_shown_height(meta_shown)
+        self._sync_mode_tail_height(meta_shown)
+
+    def _sync_mode_tail_height(self, meta_viewport_height: int) -> None:
+        action_height = self._action_row.height()
+        if action_height <= 0:
+            action_height = self._action_row.sizeHint().height()
+        tail_height = action_height + max(0, meta_viewport_height)
+        self._mode_tail.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self._mode_tail.setFixedHeight(tail_height)
+
+    def _place_collapsible_panels(self, progress: float) -> None:
+        if self._layout_metrics is None:
+            login = self._needs_browser_login()
+            show_data = (not login) and (not self._empty_loading())
+            if not show_data:
+                self._summary_viewport.set_shown_height(0)
+                self._metadata_viewport.set_shown_height(0)
+                self._dashboard_slot.set_fraction(0.0)
+                self._set_dashboard_gap(0.0)
+                self._btn_dashboard.hide()
+                self._clear_reveal_opacity(self._btn_dashboard)
+                return
+        metrics = self._layout_metrics
+        if metrics is not None:
+            details_h = metrics.details_h
+            compact_h = metrics.compact_h
+            meta_h = metrics.meta_h
+        else:
+            width = self._section_content_width()
+            details_h = self._measure_panel_height(self._details_panel, width)
+            compact_h = self._measure_panel_height(self._compact_panel, width)
+            meta_h = self._measure_panel_height(self._metadata_panel, width)
+        summary_height = int(round(details_h + ((compact_h - details_h) * progress)))
+        self._apply_clip_geometry(progress, details_h, compact_h, meta_h)
+        self._slide_transition_followers(summary_height)
+        details_opacity = _details_opacity(progress)
+        compact_opacity = _compact_opacity(progress)
+        self._set_crossfade(self._details_panel, details_opacity)
+        self._set_crossfade(self._compact_panel, compact_opacity)
+        if compact_opacity > details_opacity:
+            self._compact_panel.raise_()
+        else:
+            self._details_panel.raise_()
+
+        self._set_crossfade(self._metadata_panel, _metadata_opacity(progress))
+
+        width_fraction = _dashboard_width_fraction(progress)
+        self._dashboard_slot.set_fraction(width_fraction)
+        self._set_dashboard_gap(width_fraction)
+        if width_fraction <= 0.0:
+            self._btn_dashboard.hide()
+            self._clear_reveal_opacity(self._btn_dashboard)
+            self._btn_dashboard.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        else:
+            self._btn_dashboard.show()
+            self._set_crossfade(self._btn_dashboard, _dashboard_opacity(progress), allow_hide=False)
+
+    def _set_dashboard_gap(self, fraction: float) -> None:
+        if fraction <= 0.0:
+            self._dashboard_gap.hide()
+            return
+        if fraction >= 1.0:
+            width = _ACTION_BUTTON_GAP
+        else:
+            width = max(0, int(round(_ACTION_BUTTON_GAP * fraction)))
+        if width <= 0:
+            self._dashboard_gap.hide()
+            self._dashboard_gap.updateGeometry()
+            return
+        self._dashboard_gap.show()
+        if self._dashboard_gap.width() != width:
+            self._dashboard_gap.setFixedWidth(width)
+            self._dashboard_gap.updateGeometry()
+
+    def _set_crossfade(self, widget: QWidget, opacity: float, *, allow_hide: bool = True) -> None:
+        if allow_hide and opacity <= 0.01:
+            widget.hide()
+            self._clear_reveal_opacity(widget)
+            widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+            return
+        if widget.isHidden():
+            widget.show()
+        widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, opacity < 0.5)
+        if opacity >= 0.99:
+            self._clear_reveal_opacity(widget)
+            return
+        effect = widget.graphicsEffect()
+        if not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(widget)
+            widget.setGraphicsEffect(effect)
+        effect.setOpacity(max(0.0, opacity))
+
+    def _clear_reveal_opacity(self, widget: QWidget) -> None:
+        effect = widget.graphicsEffect()
+        if isinstance(effect, QGraphicsOpacityEffect):
+            widget.setGraphicsEffect(None)
+
+    def _lock_toggle_button_width(self) -> None:
+        """Keep Collapse/Expand the same width so the label swap cannot push Refresh."""
+        if self._toggle_width_locked:
+            return
+        button = self._btn_toggle
+        width = button.width()
+        if width <= 0:
+            return
+        button.setFixedWidth(width)
+        self._toggle_width_locked = True
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -1254,18 +1749,29 @@ class UsageWidget(QWidget):
 
     def _lock_refresh_button_metrics(self) -> None:
         """Keep the on-screen Refresh size. Later icon frames must not relayout it."""
-        self._btn_refresh.setFixedHeight(self._btn_toggle.height())
+        self._lock_toggle_button_width()
+        height = self._btn_toggle.height()
+        self._btn_refresh.setFixedHeight(height)
+        self._btn_dashboard.setFixedHeight(height)
         self._btn_refresh.setMinimumWidth(self._btn_refresh.width())
+        self._dashboard_slot.note_span()
         self._resize_to_mode()
 
     def _resize_to_mode(self) -> None:
-        root = getattr(self, "_root_layout", None)
-        if root is not None:
-            spacing = _LOGIN_ROOT_SPACING if self._needs_browser_login() else 8
-            if root.spacing() != spacing:
-                root.setSpacing(spacing)
-        width = self.preferred_width()
-        height = self.preferred_height()
+        if (not self._applying_layout) and hasattr(self, "_summary_viewport"):
+            self._apply_layout_progress(self._layout_progress)
+            return
+        if self._layout_metrics is not None:
+            width = self.width() if self.width() > 1 else _WIDGET_WIDTH
+            height = self._animated_content_height()
+        else:
+            root = getattr(self, "_root_layout", None)
+            if root is not None:
+                spacing = _LOGIN_ROOT_SPACING if self._needs_browser_login() else 8
+                if root.spacing() != spacing:
+                    root.setSpacing(spacing)
+            width = self.preferred_width()
+            height = self.preferred_height()
         if self.width() != width or self.height() != height:
             self.setFixedSize(width, height)
         window = self.window()
@@ -1290,6 +1796,53 @@ class UsageWidget(QWidget):
                 self._opacity_fader.fade_to(widget, 1.0, remove_at_full=True)
                 continue
             self._opacity_fader.fade_to(widget, _DATA_DIM_OPACITY)
+
+
+def _smoothstep(t: float) -> float:
+    clamped = min(1.0, max(0.0, t))
+    return clamped * clamped * (3.0 - (2.0 * clamped))
+
+
+def _details_opacity(progress: float) -> float:
+    """Stay solid while the lower sections clip away, then dissolve into the summary."""
+    if progress <= 0.62:
+        return 1.0
+    if progress >= 0.84:
+        return 0.0
+    return 1.0 - _smoothstep((progress - 0.62) / 0.22)
+
+
+def _compact_opacity(progress: float) -> float:
+    """Summary appears as the detail text leaves, so the card never goes blank."""
+    if progress <= 0.7:
+        return 0.0
+    if progress >= 0.92:
+        return 1.0
+    return _smoothstep((progress - 0.7) / 0.22)
+
+
+def _metadata_opacity(progress: float) -> float:
+    """Metadata is clipped by the window edge, so it stays solid until it is gone."""
+    if progress >= 1.0:
+        return 0.0
+    return 1.0
+
+
+def _dashboard_width_fraction(progress: float) -> float:
+    """Hold the slot until the label has dissolved, then close it from the leading edge."""
+    hold = 0.28
+    if progress <= hold:
+        return 1.0
+    return 1.0 - ((progress - hold) / (1.0 - hold))
+
+
+def _dashboard_opacity(progress: float) -> float:
+    hold = 0.28
+    if progress <= 0.0:
+        return 1.0
+    if progress >= hold:
+        return 0.0
+    return 1.0 - _smoothstep(progress / hold)
 
 
 def _login_failure_text(exc: BrowserImportError) -> str:

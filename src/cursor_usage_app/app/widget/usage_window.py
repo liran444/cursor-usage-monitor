@@ -5,7 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QColor, QCursor, QGuiApplication, QIcon, QKeyEvent, QMouseEvent, QPainter, QPen
+from PySide6.QtGui import (
+    QColor,
+    QCursor,
+    QGuiApplication,
+    QIcon,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPen,
+)
 from PySide6.QtWidgets import QApplication, QWidget
 
 from cursor_usage_app.app.shell_branding import icon_for_shell, load_app_icon
@@ -69,9 +78,17 @@ class UsageWindow(QWidget):
         return self._card
 
     def resize_for_content(self) -> None:
-        w = self._card.preferred_width() + 4
-        h = self._card.preferred_height() + 4
-        self.setFixedSize(w, h)
+        if self._card._layout_metrics is not None:
+            width = self._card.width() + 4
+            height = self._card._animated_content_height() + 4
+            if width > 4 and (self.width() != width or self.height() != height):
+                self.setFixedSize(width, height)
+            return
+        width = self._card.preferred_width() + 4
+        height = self._card.preferred_height() + 4
+        if self.width() == width and self.height() == height:
+            return
+        self.setFixedSize(width, height)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -88,10 +105,14 @@ class UsageWindow(QWidget):
         # paint and shifts margins by a few pixels.
         inset = 2
         self._card.move(inset, inset)
-        self._card.setFixedSize(
-            max(1, self.width() - (inset * 2)),
-            max(1, self.height() - (inset * 2)),
-        )
+        target_w = max(1, self.width() - (inset * 2))
+        if self._card._layout_metrics is not None:
+            if self._card.width() != target_w:
+                self._card.setFixedWidth(target_w)
+            return
+        target_h = max(1, self.height() - (inset * 2))
+        if self._card.width() != target_w or self._card.height() != target_h:
+            self._card.setFixedSize(target_w, target_h)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
         if event.key() == Qt.Key.Key_Escape:
