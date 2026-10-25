@@ -55,7 +55,7 @@ On **tag push** (`v*`):
 **Release checklist**
 
 1. Bump `project.version` in `pyproject.toml`.
-2. Commit, tag `v{version}` (e.g. `v0.1.9`), push the tag.
+2. Commit, tag `v{version}` (e.g. `vX.X.X`), push the tag.
 3. Wait for the workflow; installers appear under **Releases** on GitHub.
 
 Manual **workflow_dispatch** still builds artifacts but does **not** create a GitHub Release (no tag ref).
