@@ -1222,9 +1222,12 @@ class UsageWidget(QWidget):
 
         od = snapshot.on_demand_display
         if od.show_card:
+            personal_od = snapshot.personal_on_demand
+            limit_usd = personal_od.limit_usd if personal_od is not None else None
             self._od_pct.setText(format_percent(od.progress_percent))
-            footer_pool = "Team Pool" if od.pool_kind == "team" else "Personal Pool"
-            self._od_amount.setText(f"{format_usd(od.on_demand_used_usd)} / {footer_pool}")
+            self._od_amount.setText(
+                f"{format_usd(od.on_demand_used_usd)} / {format_usd(limit_usd)}",
+            )
             self._od_bar.set_percent(od.progress_percent)
 
     def _clear_data_fields(self) -> None:

@@ -18,12 +18,9 @@ def test_team_pool_on_demand_uses_team_progress() -> None:
     assert snapshot.team_pool.used_usd == 412.5
     assert snapshot.team_pool.limit_usd == 800.0
 
-    display = snapshot.on_demand_display
-    assert display.show_card is True
-    assert display.pool_kind == "team"
-    assert display.progress_percent == pytest.approx(27.5)
-    assert display.personal_on_demand_used_usd == 4.25
-    assert display.on_demand_used_usd == 55.0
+    assert snapshot.team_on_demand is not None
+    assert snapshot.team_on_demand.used_usd == 55.0
+    assert snapshot.on_demand_display.show_card is False
 
 
 def test_personal_only_on_demand_card() -> None:
@@ -53,21 +50,19 @@ def test_personal_pool_from_plan_when_individual_totals_missing() -> None:
     assert display.on_demand_used_usd == 8.5
 
 
-def test_team_on_demand_only_without_team_pool() -> None:
+def test_team_on_demand_only_derives_team_pool() -> None:
     snapshot = UsageSummaryMapper.from_api_payload(
         load_fixture("usage_summary_team_on_demand_only.json"),
     )
 
-    assert snapshot.team_pool is None
     assert snapshot.team_on_demand is not None
     assert snapshot.team_on_demand.used_usd == 55.0
     assert snapshot.team_on_demand.limit_usd == 200.0
 
-    display = snapshot.on_demand_display
-    assert display.show_card is True
-    assert display.pool_kind == "team"
-    assert display.progress_percent == pytest.approx(27.5)
-    assert display.on_demand_used_usd == 55.0
+    assert snapshot.team_pool is not None
+    assert snapshot.team_pool.used_usd == 55.0
+    assert snapshot.team_pool.limit_usd == 200.0
+    assert snapshot.on_demand_display.show_card is False
 
 
 def test_team_on_demand_limit_from_used_and_remaining() -> None:
@@ -92,8 +87,10 @@ def test_team_on_demand_limit_from_used_and_remaining() -> None:
 
     assert snapshot.team_on_demand is not None
     assert snapshot.team_on_demand.limit_usd == 200.0
-    assert snapshot.on_demand_display.show_card is True
-    assert snapshot.on_demand_display.pool_kind == "team"
+    assert snapshot.team_pool is not None
+    assert snapshot.team_pool.used_usd == 55.0
+    assert snapshot.team_pool.limit_usd == 200.0
+    assert snapshot.on_demand_display.show_card is False
 
 
 def test_hides_on_demand_when_absent() -> None:

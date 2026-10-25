@@ -4,26 +4,26 @@ from cursor_usage_app.domain.mapper import UsageSummaryMapper
 from fixture_loader import load_fixture
 
 
-def test_ok_envelope_shows_team_and_on_demand() -> None:
+def test_ok_envelope_shows_team_row_without_personal_on_demand_card() -> None:
     snapshot = UsageSummaryMapper.from_api_payload(load_fixture("usage_summary_team_pool.json"))
     vm = view_model_from_envelope(
         CacheEnvelopeOk(ok=True, data=snapshot, fetched_at=utc_now_iso()),
     )
     assert vm.phase == "ok"
     assert vm.show_team_row is True
-    assert vm.show_on_demand_card is True
+    assert vm.show_on_demand_card is False
     assert vm.inline_message is None
 
 
-def test_team_on_demand_only_shows_on_demand_not_team_row() -> None:
+def test_team_on_demand_only_shows_team_row() -> None:
     snapshot = UsageSummaryMapper.from_api_payload(
         load_fixture("usage_summary_team_on_demand_only.json"),
     )
     vm = view_model_from_envelope(
         CacheEnvelopeOk(ok=True, data=snapshot, fetched_at=utc_now_iso()),
     )
-    assert vm.show_team_row is False
-    assert vm.show_on_demand_card is True
+    assert vm.show_team_row is True
+    assert vm.show_on_demand_card is False
 
 
 def test_personal_only_hides_team_row() -> None:

@@ -25,16 +25,15 @@ Fields read by `UsageSummaryMapper`:
 | `individualUsage.onDemand.limit` | number (cents) | Personal on-demand pool limit |
 | `teamUsage.used` | number (cents) | Team pool `used_usd` (row hidden if absent) |
 | `teamUsage.limit` | number (cents) | Team pool `limit_usd` |
-| `teamUsage.onDemand.used` | number (cents) | Team on-demand spend (progress when team pool exists) |
-| `teamUsage.onDemand.limit` | number (cents) | Team on-demand pool limit |
+| `teamUsage.onDemand.used` | number (cents) | Team pool `used_usd` when top-level `used`/`limit` absent |
+| `teamUsage.onDemand.limit` | number (cents) | Team pool `limit_usd` when top-level `used`/`limit` absent |
 
 `teamUsage` may be omitted for personal-only accounts.
 
-## On-demand card rules (mapper)
+## Team pool rules (mapper)
 
-- **Progress %:** `teamUsage.onDemand` used/limit when team on-demand has a positive limit (or limit derived from `used` + `remaining`); otherwise `individualUsage.onDemand` used/limit.
-- **Hide card:** when both on-demand objects are missing or both limits are zero/null.
-- **Pool label:** Team when team pool present; otherwise Personal.
+- **Team row:** `teamUsage.used` / `teamUsage.limit` when present; otherwise the same fields from `teamUsage.onDemand` (limit may be derived from `used` + `remaining`).
+- **On-demand card:** `individualUsage.onDemand` only (personal pay-as-you-go). Team budget is never shown on this card.
 
 ## Errors (HTTP)
 
