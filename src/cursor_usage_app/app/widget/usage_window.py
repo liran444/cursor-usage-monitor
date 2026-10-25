@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QCursor,
@@ -89,6 +89,10 @@ class UsageWindow(QWidget):
         if self.width() == width and self.height() == height:
             return
         self.setFixedSize(width, height)
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        QTimer.singleShot(0, self.resize_for_content)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)

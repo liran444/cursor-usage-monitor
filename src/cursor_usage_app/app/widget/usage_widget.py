@@ -63,7 +63,7 @@ from cursor_usage_app.auth.browser_import import (
     set_browser_login_flow_active,
 )
 from cursor_usage_app.auth.session_store import SessionStore
-from cursor_usage_app.auth.token_normalize import TokenNormalizeError
+from cursor_usage_app.auth.token_normalize import TokenNormalizeError, normalize_session_token
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, CacheEnvelopeOk, parse_cache_envelope
 from cursor_usage_app.domain.models import UsageSnapshot
 from cursor_usage_app.settings.app_settings import ThemeId, load_app_settings, mutate_app_settings
@@ -148,6 +148,7 @@ class UsageWidget(QWidget):
         self._fetch_thread = None
         self._login_waiting = False
         self._login_busy = False
+        self._login_verify_pending = False
         self._login_deadline_ms = 0
         self._activation_hooked = False
         self._login_timer = QTimer(self)
@@ -346,14 +347,15 @@ class UsageWidget(QWidget):
             chrome.activate()
             blocks.append(max(0, chrome.sizeHint().height()))
 
-        if self._inline_error.isVisible() and self._inline_error.text().strip() != "":
+        if (not self._inline_error.isHidden()) and self._inline_error.text().strip() != "":
             blocks.append(self._inline_error.sizeHint().height())
-        if self._loading_card.isVisible():
+        if not self._loading_card.isHidden():
             blocks.append(self._frame_layout_height(self._loading_card))
 
         blocks.append(self._frame_layout_height(self._login_card))
         blocks.append(self._rule_before_actions.sizeHint().height())
-        if self._token_panel.isVisible():
+        # isVisible() is false for the whole tree while the window is hidden; isHidden() reflects .show().
+        if not self._token_panel.isHidden():
             blocks.append(self._frame_layout_height(self._token_panel))
         blocks.append(self._btn_token.sizeHint().height())
 
@@ -382,6 +384,19 @@ class UsageWidget(QWidget):
         root.invalidate()
         root.activate()
         return root.sizeHint().height()
+
+    def _clear_wrapped_label_pins(self) -> None:
+        labels = (
+            self._login_body,
+            self._login_status,
+            self._login_error,
+            self._token_hint,
+            self._token_error,
+        )
+        for label in labels:
+            label.setProperty("_wrap_pin", None)
+            label.setMinimumHeight(0)
+            label.setMaximumHeight(_QT_MAX)
 
     def _pin_wrapped_labels(self) -> None:
         """Keep wrapped labels at text height so leftover window space cannot open gaps inside cards."""
@@ -866,6 +881,8 @@ class UsageWidget(QWidget):
 
     def _on_fetch_finished(self, _exit_code: int) -> None:
         self.reload_from_cache()
+        if self._login_verify_pending:
+            self._finish_login_after_fetch()
         self.cache_or_session_changed.emit()
         if self._manual_refresh_cooldown:
             self._set_refresh_button_state("cooldown")
@@ -1353,17 +1370,54 @@ class UsageWidget(QWidget):
         if not self._login_waiting:
             return
         try:
-            self._store.set_token(token)
+            normalized = normalize_session_token(token)
+        except TokenNormalizeError as exc:
+            self._on_import_error(BrowserImportError(str(exc)))
+            return
+        current = self._store.get_token()
+        if current is not None and current == normalized:
+            self._login_status.setText(
+                "Still waiting for a cursor.com session. Finish signing in, then return here."
+            )
+            self._login_status.show()
+            QTimer.singleShot(0, self._resize_to_mode)
+            return
+        try:
+            self._store.set_token(normalized)
             self.cache_or_session_changed.emit()
         except Exception as exc:
             self._finish_login_failed(BrowserImportError(str(exc)))
             return
-        self._stop_login_wait()
+        self._login_verify_pending = True
         self._login_error.hide()
-        self._login_status.setText("Session saved. Refreshing usage…")
+        self._login_error.setText("")
+        self._login_status.setText("Verifying session…")
         self._login_status.show()
         self._resize_to_mode()
         self.refresh()
+
+    def _finish_login_after_fetch(self) -> None:
+        self._login_verify_pending = False
+        if not self._login_waiting:
+            return
+        view_model = self._view_model
+        if view_model.phase == "ok" and view_model.snapshot is not None:
+            self._stop_login_wait()
+            self._login_status.hide()
+            self._login_status.setText("")
+            QTimer.singleShot(0, self._resize_to_mode)
+            return
+        if view_model.error_code in ("invalid_token", "not_authenticated"):
+            self._login_status.setText(
+                "Still waiting for a cursor.com session. Finish signing in, then return here."
+            )
+            self._login_status.show()
+            QTimer.singleShot(0, self._resize_to_mode)
+            return
+        message = view_model.inline_message or view_model.error_message
+        self._finish_login_failed(
+            BrowserImportError(message or "Could not verify the browser session."),
+        )
 
     def _on_import_error(self, exc: object) -> None:
         self._login_busy = False
@@ -1398,9 +1452,11 @@ class UsageWidget(QWidget):
 
     def _stop_login_wait(self) -> None:
         self._login_waiting = False
+        self._login_verify_pending = False
         self._login_timer.stop()
         self._set_login_spinner(False)
         set_browser_login_flow_active(False)
+        QTimer.singleShot(0, self._resize_to_mode)
 
     def _set_login_spinner(self, active: bool) -> None:
         if active:
@@ -1811,7 +1867,14 @@ class UsageWidget(QWidget):
         if self._settings_popup is not None:
             self._sync_tray_display_radios()
             self._sync_theme_radios()
+        if self._needs_browser_login():
+            QTimer.singleShot(0, self._relayout_browser_login_after_show)
         self._schedule_refresh_metrics_lock()
+
+    def _relayout_browser_login_after_show(self) -> None:
+        """Tray reopen measures height while hidden; re-pin and resize once the window is visible."""
+        self._clear_wrapped_label_pins()
+        self._resize_to_mode()
 
     def _schedule_refresh_metrics_lock(self) -> None:
         """Lock Refresh size only once the usage actions are on screen.
