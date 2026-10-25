@@ -21,6 +21,8 @@ Fields read by `UsageSummaryMapper`:
 | `individualUsage.plan.totalPercentUsed` | number | Dashboard TOTAL % (tray ring, widget) |
 | `individualUsage.plan.apiPercentUsed` | number | API segment of TOTAL arc |
 | `individualUsage.plan.autoPercentUsed` | number | Auto segment of TOTAL arc |
+| `individualUsage.plan.breakdown.bonus` | number (cents) | Bonus credit (÷ 100); inline `+$` chip on the Personal amount row when &gt; 0 |
+| `individualUsage.plan.breakdown.total` | number (cents) | Included + bonus pool size, shown immediately on hover of the info icon |
 | `individualUsage.onDemand.used` | number (cents) | Personal on-demand spend (subcopy) |
 | `individualUsage.onDemand.limit` | number (cents) | Personal on-demand pool limit |
 | `teamUsage.used` | number (cents) | Team pool `used_usd` (row hidden if absent) |

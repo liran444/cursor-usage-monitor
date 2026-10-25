@@ -14,6 +14,9 @@ def test_enterprise_team_on_demand_example_payload() -> None:
     assert snapshot.billing_cycle_end == "2026-10-20T11:08:43.000Z"
     assert snapshot.personal.used_usd == 20.0
     assert snapshot.personal.limit_usd == 20.0
+    assert snapshot.personal_plan_bonus is not None
+    assert snapshot.personal_plan_bonus.bonus_usd == pytest.approx(5.92)
+    assert snapshot.personal_plan_bonus.total_pool_usd == pytest.approx(25.92)
     assert snapshot.plan_percents.total_percent_used == 32.4
     assert snapshot.plan_percents.api_percent_used == 32.4
     assert snapshot.plan_percents.auto_percent_used == 0.0

@@ -73,6 +73,7 @@ class Palette:
     popup_muted: str
     popup_path: str
     popup_radio: str
+    bonus_chip_text: str
 
 
 DARK = Palette(
@@ -130,6 +131,7 @@ DARK = Palette(
     popup_muted="#c4c4c6",
     popup_path="#9a9a9e",
     popup_radio="#ececee",
+    bonus_chip_text="#b8b8bc",
 )
 
 LIGHT = Palette(
@@ -187,6 +189,7 @@ LIGHT = Palette(
     popup_muted="#5c616b",
     popup_path="#8b9098",
     popup_radio="#2c2f36",
+    bonus_chip_text="#5c616b",
 )
 
 # Screenshot surround. Not part of either theme's painted card.
@@ -296,6 +299,13 @@ QLabel#onDemandPercent {{
 QLabel#mutedLabel {{
     color: {p.muted};
     font-size: 12px;
+    margin: 0px;
+    padding: 0px;
+}}
+QLabel#bonusChip {{
+    color: {p.bonus_chip_text};
+    font-size: 11px;
+    font-weight: 650;
     margin: 0px;
     padding: 0px;
 }}

@@ -7,6 +7,7 @@ from typing import Any
 
 from cursor_usage_app.domain.models import (
     OnDemandDisplay,
+    PersonalPlanBonus,
     PlanPercents,
     UsagePool,
     UsageSnapshot,
@@ -42,6 +43,7 @@ class UsageSummaryMapper:
         team_pool = _team_pool_from_usage(team, team_on_demand)
 
         on_demand_display = _build_on_demand_display(personal_on_demand=personal_on_demand)
+        personal_plan_bonus = _personal_plan_bonus_from_plan(plan)
 
         _log_segment_clamp_if_needed(plan_percents)
 
@@ -53,7 +55,19 @@ class UsageSummaryMapper:
             personal_on_demand=personal_on_demand,
             team_on_demand=team_on_demand,
             on_demand_display=on_demand_display,
+            personal_plan_bonus=personal_plan_bonus,
         )
+
+
+def _personal_plan_bonus_from_plan(plan: dict[str, Any]) -> PersonalPlanBonus | None:
+    breakdown = _as_dict(plan.get("breakdown"))
+    bonus_usd = _to_usd_from_api_cents(breakdown.get("bonus"))
+    total_pool_usd = _to_usd_from_api_cents(breakdown.get("total"))
+    if bonus_usd is None or total_pool_usd is None:
+        return None
+    if bonus_usd <= 0 or total_pool_usd <= 0:
+        return None
+    return PersonalPlanBonus(bonus_usd=bonus_usd, total_pool_usd=total_pool_usd)
 
 
 def _team_pool_from_usage(

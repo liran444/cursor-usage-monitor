@@ -39,10 +39,13 @@ from cursor_usage_app.app.widget.fetch_worker import load_cache, start_fetch_in_
 from cursor_usage_app.app.widget.formatting import (
     format_datetime_display,
     format_percent,
+    format_personal_bonus_chip,
+    format_personal_bonus_tooltip,
     format_pool_percent,
     format_usd,
 )
 from cursor_usage_app.app.widget.gauge_widget import DonutGauge, MiniTotalGauge, SegmentedTotalGauge
+from cursor_usage_app.app.widget.instant_info_button import InstantInfoButton
 from cursor_usage_app.app.widget.material_icons import material_icon, material_pixmap
 from cursor_usage_app.app.widget.progress_bar import HorizontalBar
 from cursor_usage_app.app.widget.opacity_fade import OpacityFader
@@ -575,6 +578,17 @@ class UsageWidget(QWidget):
         self._personal_pct = QLabel()
         self._personal_pct.setObjectName("cyanPercent")
         personal_row.addWidget(self._personal_amount)
+        bonus_cluster = QWidget()
+        bonus_cluster_layout = QHBoxLayout(bonus_cluster)
+        bonus_cluster_layout.setContentsMargins(0, 0, 0, 0)
+        bonus_cluster_layout.setSpacing(2)
+        self._personal_bonus = QLabel()
+        self._personal_bonus.setObjectName("bonusChip")
+        self._personal_bonus.hide()
+        bonus_cluster_layout.addWidget(self._personal_bonus, alignment=Qt.AlignmentFlag.AlignVCenter)
+        self._personal_bonus_info = InstantInfoButton()
+        bonus_cluster_layout.addWidget(self._personal_bonus_info, alignment=Qt.AlignmentFlag.AlignVCenter)
+        personal_row.addWidget(bonus_cluster, alignment=Qt.AlignmentFlag.AlignVCenter)
         personal_row.addStretch()
         personal_row.addWidget(self._personal_pct)
         personal_layout.addLayout(personal_row)
@@ -1072,6 +1086,7 @@ class UsageWidget(QWidget):
         self._btn_dashboard.setIcon(material_icon("open_in_new", palette.action_icon))
         self._update_toggle_button()
         self._personal_icon.setPixmap(material_pixmap("person", palette.cyan, size=16))
+        self._personal_bonus_info.apply_active_palette()
         self._team_icon.setPixmap(material_pixmap("group", palette.team_icon, size=16))
         self._personal_bar.set_fill_color(QColor(palette.cyan))
         self._od_bar.set_fill_color(QColor(palette.coral))
@@ -1196,6 +1211,15 @@ class UsageWidget(QWidget):
         )
         self._personal_pct.setText(format_percent(personal_pct))
         self._personal_bar.set_percent(personal_pct)
+        bonus_chip = format_personal_bonus_chip(snapshot.personal_plan_bonus)
+        if bonus_chip is not None:
+            self._personal_bonus.setText(bonus_chip)
+            self._personal_bonus.show()
+            self._personal_bonus_info.set_hint(format_personal_bonus_tooltip(snapshot.personal_plan_bonus))
+        else:
+            self._personal_bonus.clear()
+            self._personal_bonus.hide()
+            self._personal_bonus_info.set_hint(None)
 
         plan = snapshot.plan_percents
         self._total_gauge.set_plan_percents(
@@ -1233,6 +1257,9 @@ class UsageWidget(QWidget):
     def _clear_data_fields(self) -> None:
         self._personal_amount.setText("—")
         self._personal_pct.setText("—")
+        self._personal_bonus.clear()
+        self._personal_bonus.hide()
+        self._personal_bonus_info.set_hint(None)
         self._personal_bar.set_percent(None)
         self._team_amount.setText("—")
         self._team_pct.setText("—")

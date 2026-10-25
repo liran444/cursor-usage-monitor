@@ -39,6 +39,18 @@ class UsagePool:
 
 
 @dataclass(frozen=True)
+class PersonalPlanBonus:
+    """Extra plan credit from ``individualUsage.plan.breakdown`` (API cents → USD)."""
+
+    bonus_usd: float
+    total_pool_usd: float
+
+    @property
+    def has_bonus(self) -> bool:
+        return self.bonus_usd > 0 and self.total_pool_usd > 0
+
+
+@dataclass(frozen=True)
 class OnDemandDisplay:
     """Derived on-demand card fields for widget/tray."""
 
@@ -58,6 +70,7 @@ class UsageSnapshot:
     personal_on_demand: UsagePool | None
     team_on_demand: UsagePool | None
     on_demand_display: OnDemandDisplay
+    personal_plan_bonus: PersonalPlanBonus | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -70,6 +83,7 @@ class UsageSnapshot:
         team_pool = data.get("team_pool")
         personal_od = data.get("personal_on_demand")
         team_od = data.get("team_on_demand")
+        plan_bonus = data.get("personal_plan_bonus")
 
         return cls(
             billing_cycle_end=data.get("billing_cycle_end"),
@@ -112,5 +126,13 @@ class UsageSnapshot:
                 pool_kind=on_demand.get("pool_kind"),
                 personal_on_demand_used_usd=on_demand.get("personal_on_demand_used_usd"),
                 on_demand_used_usd=on_demand.get("on_demand_used_usd"),
+            ),
+            personal_plan_bonus=(
+                PersonalPlanBonus(
+                    bonus_usd=plan_bonus.get("bonus_usd"),
+                    total_pool_usd=plan_bonus.get("total_pool_usd"),
+                )
+                if plan_bonus is not None
+                else None
             ),
         )
