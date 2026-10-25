@@ -17,7 +17,7 @@ from PySide6.QtCore import (
     QVariantAnimation,
     Signal,
 )
-from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap, QTextDocument
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
@@ -288,14 +288,80 @@ class UsageWidget(QWidget):
     def preferred_height(self) -> int:
         if self._layout_metrics is not None:
             return self._animated_content_height()
-        layout = self.layout()
-        if layout is None:
+        if self.layout() is None:
             return _COMPACT_HEIGHT if self._compact else _FULL_HEIGHT
         self.ensurePolished()
+        return self._measure_root_layout_height()
+
+    def _measure_root_layout_height(self) -> int:
+        """Natural content height; temporarily ignores a prior setFixedSize on this widget."""
+        layout = self._root_layout
+        if layout is None:
+            return _COMPACT_HEIGHT if self._compact else _FULL_HEIGHT
+        width = self.preferred_width()
+        saved_min_h = self.minimumHeight()
+        saved_max_h = self.maximumHeight()
+        saved_w = self.width()
+        saved_h = self.height()
+        fixed_size = saved_min_h == saved_max_h and saved_max_h < _QT_MAX
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(_QT_MAX)
+        if saved_w != width:
+            self.setFixedWidth(width)
         self._pin_wrapped_labels()
-        layout.invalidate()
-        layout.activate()
-        return layout.sizeHint().height()
+        if self._needs_browser_login():
+            height = self._measure_browser_login_height()
+        else:
+            layout.invalidate()
+            layout.activate()
+            height = layout.sizeHint().height()
+        if fixed_size and saved_w > 0 and saved_h > 0:
+            self.setFixedSize(saved_w, saved_h)
+        else:
+            self.setMinimumHeight(saved_min_h)
+            self.setMaximumHeight(saved_max_h)
+            if saved_w > 0 and saved_h > 0:
+                self.resize(saved_w, saved_h)
+        return height
+
+    def _frame_layout_height(self, frame: QFrame) -> int:
+        card_layout = frame.layout()
+        if card_layout is None:
+            return max(0, frame.sizeHint().height())
+        card_layout.invalidate()
+        card_layout.activate()
+        return max(0, card_layout.sizeHint().height())
+
+    def _measure_browser_login_height(self) -> int:
+        """Sum login chrome explicitly; root sizeHint is wrong before the window is shown."""
+        root = self._root_layout
+        margins = root.contentsMargins()
+        spacing = root.spacing()
+        total = margins.top() + margins.bottom()
+        blocks: list[int] = []
+
+        chrome = root.itemAt(0).layout()
+        if chrome is not None:
+            chrome.invalidate()
+            chrome.activate()
+            blocks.append(max(0, chrome.sizeHint().height()))
+
+        if self._inline_error.isVisible() and self._inline_error.text().strip() != "":
+            blocks.append(self._inline_error.sizeHint().height())
+        if self._loading_card.isVisible():
+            blocks.append(self._frame_layout_height(self._loading_card))
+
+        blocks.append(self._frame_layout_height(self._login_card))
+        blocks.append(self._rule_before_actions.sizeHint().height())
+        if self._token_panel.isVisible():
+            blocks.append(self._frame_layout_height(self._token_panel))
+        blocks.append(self._btn_token.sizeHint().height())
+
+        for index, block_h in enumerate(blocks):
+            total += block_h
+            if index > 0:
+                total += spacing
+        return total
 
     def _animated_content_height(self) -> int:
         """Linear height between the two measured rest states. No layout pass."""
@@ -368,7 +434,15 @@ class UsageWidget(QWidget):
             int(Qt.TextFlag.TextWordWrap),
             text,
         )
-        return rect.height() + (label.margin() * 2)
+        doc = QTextDocument()
+        doc.setDefaultFont(label.font())
+        doc.setTextWidth(float(body_width))
+        doc.setPlainText(text)
+        doc_height = int(doc.size().height())
+        label.setWordWrap(True)
+        for_width = label.heightForWidth(body_width)
+        height = max(rect.height(), doc_height, for_width)
+        return height + (label.margin() * 2)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -1171,6 +1245,8 @@ class UsageWidget(QWidget):
         self._metadata_block.setVisible(show_data)
         self._action_row.setVisible(not login)
         self._mode_tail.setVisible(not login)
+        if login or empty_loading:
+            self._release_widget_vertical_lock(self._mode_tail)
         self._btn_settings.setVisible(not login)
         self._btn_token.setVisible(login)
         if login or empty_loading:
