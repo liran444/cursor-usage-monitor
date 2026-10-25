@@ -84,3 +84,40 @@ def test_startup_opens_widget(qapp, tmp_path: Path) -> None:
 
     assert controller._window.isVisible() is True
     controller._tray.hide()
+
+
+def test_prepare_for_shutdown_stops_poll_and_blocks_refresh(
+    qapp,
+    fake_keyring,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fetch_started = {"count": 0}
+
+    def fake_start_fetch(parent, cache_path=None, store=None, on_finished=None):
+        fetch_started["count"] += 1
+        return MagicMock()
+
+    monkeypatch.setattr(
+        "cursor_usage_app.app.tray_controller.start_fetch_in_thread",
+        fake_start_fetch,
+    )
+
+    store = SessionStore(fallback_path=tmp_path / "session_token")
+    store.set_token("user_01::test")
+    controller = TrayController(
+        store=store,
+        cache_path=tmp_path / "usage_cache.json",
+        poll_interval_ms=60_000,
+    )
+    controller.show_tray()
+    assert controller._poll_timer.isActive() is True
+
+    controller.prepare_for_shutdown()
+
+    assert controller._poll_timer.isActive() is False
+    assert controller._window.isVisible() is False
+    controller.refresh()
+    assert fetch_started["count"] == 0
+
+    controller.prepare_for_shutdown()

@@ -61,6 +61,7 @@ class TrayController(QObject):
         self._silent_import_finished.connect(self.refresh)
         self._interactive_import_finished.connect(self._on_interactive_import_finished)
         self._import_busy = False
+        self._shutting_down = False
         self._window.widget().tray_settings_changed.connect(self._on_tray_settings_changed)
         self._window.widget().cache_or_session_changed.connect(self.sync_tray_chrome)
 
@@ -82,6 +83,16 @@ class TrayController(QObject):
         self._tray.show()
         self._poll_timer.start()
         QTimer.singleShot(0, self._open_widget)
+
+    def prepare_for_shutdown(self) -> None:
+        """Stop timers and hide shell UI before Qt tears down the tray (Linux D-Bus)."""
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        self._poll_timer.stop()
+        self._window.widget().prepare_for_shutdown()
+        self._window.hide()
+        self._tray.hide()
 
     def _build_menu(self) -> None:
         menu = QMenu()
@@ -182,6 +193,8 @@ class TrayController(QObject):
         exc: BrowserImportError | None,
     ) -> None:
         self._import_busy = False
+        if self._shutting_down:
+            return
         if result is not None:
             try:
                 self._store.set_token(result.token)
@@ -251,6 +264,8 @@ class TrayController(QObject):
         self._window.activateWindow()
 
     def refresh(self) -> None:
+        if self._shutting_down:
+            return
         self._fetch_runner = start_fetch_in_thread(
             self,
             cache_path=self._cache_path,
@@ -259,6 +274,8 @@ class TrayController(QObject):
         )
 
     def _on_fetch_finished(self, _exit_code: int) -> None:
+        if self._shutting_down:
+            return
         envelope = load_cache(self._cache_path)
         self._apply_cache_to_tray(envelope)
         self._window.widget().reload_from_cache()

@@ -149,6 +149,7 @@ class UsageWidget(QWidget):
         self._login_waiting = False
         self._login_busy = False
         self._login_verify_pending = False
+        self._prepare_shutdown_done = False
         self._login_deadline_ms = 0
         self._activation_hooked = False
         self._login_timer = QTimer(self)
@@ -1456,7 +1457,25 @@ class UsageWidget(QWidget):
         self._login_timer.stop()
         self._set_login_spinner(False)
         set_browser_login_flow_active(False)
-        QTimer.singleShot(0, self._resize_to_mode)
+        if not self._prepare_shutdown_done:
+            QTimer.singleShot(0, self._resize_to_mode)
+
+    def prepare_for_shutdown(self) -> None:
+        """Stop UI timers and login polling; do not relayout during app quit."""
+        if self._prepare_shutdown_done:
+            return
+        self._prepare_shutdown_done = True
+        self._login_timer.stop()
+        self._login_spinner_timer.stop()
+        self._busy_timer.stop()
+        self._refresh_cooldown_timer.stop()
+        if self._layout_anim is not None:
+            self._layout_anim.stop()
+        self._login_waiting = False
+        self._login_verify_pending = False
+        self._login_busy = False
+        set_browser_login_flow_active(False)
+        self._set_login_spinner(False)
 
     def _set_login_spinner(self, active: bool) -> None:
         if active:

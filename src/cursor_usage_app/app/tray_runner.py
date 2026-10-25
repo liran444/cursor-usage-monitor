@@ -33,6 +33,7 @@ def run_tray(argv: list[str] | None = None) -> int:
 
     controller = TrayController()
     controller_holder.append(controller)
+    app.aboutToQuit.connect(controller.prepare_for_shutdown)
     controller.show_tray()
 
     smoke_ms = os.environ.get("CURSOR_USAGE_TRAY_SMOKE_MS")
