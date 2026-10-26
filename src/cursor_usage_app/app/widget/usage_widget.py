@@ -1104,6 +1104,7 @@ class UsageWidget(QWidget):
         self._mini_total.update()
         for bells in self._notify_bells_by_section.values():
             for bell in bells:
+                bell.apply_active_palette()
                 bell.set_notification_enabled(bell.isChecked())
         if self._settings_popup is not None:
             self._settings_popup.apply_active_palette()
