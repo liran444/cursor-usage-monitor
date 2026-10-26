@@ -37,7 +37,7 @@ def format_personal_bonus_chip(bonus: PersonalPlanBonus | None) -> str | None:
 def format_personal_bonus_tooltip(bonus: PersonalPlanBonus | None) -> str | None:
     if bonus is None or not bonus.has_bonus:
         return None
-    return f"Bonus credit · {format_usd(bonus.total_pool_usd)} total pool"
+    return f"Used bonus credit · {format_usd(bonus.total_pool_usd)} total pool"
 
 
 def format_datetime_display(iso_value: str | None) -> str:

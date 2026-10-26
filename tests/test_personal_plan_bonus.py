@@ -41,7 +41,7 @@ def test_bonus_info_hint_stays_in_the_same_window(qapp) -> None:
     from cursor_usage_app.app.widget.instant_info_button import InstantInfoButton
 
     button = InstantInfoButton()
-    button.set_hint("Bonus credit · $41.81 total pool")
+    button.set_hint("Used bonus credit · $41.81 total pool")
     button.enterEvent(None)
     assert button._hint.isWindow() is False
 
@@ -49,5 +49,5 @@ def test_bonus_info_hint_stays_in_the_same_window(qapp) -> None:
 def test_format_personal_bonus_chip() -> None:
     bonus = PersonalPlanBonus(bonus_usd=21.81, total_pool_usd=41.81)
     assert format_personal_bonus_chip(bonus) == "+$21.81"
-    assert format_personal_bonus_tooltip(bonus) == "Bonus credit · $41.81 total pool"
+    assert format_personal_bonus_tooltip(bonus) == "Used bonus credit · $41.81 total pool"
     assert format_personal_bonus_chip(None) is None
