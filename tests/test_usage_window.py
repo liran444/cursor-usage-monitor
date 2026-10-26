@@ -62,7 +62,33 @@ def test_mouse_target_blocks_window_drag_on_buttons_only(qapp) -> None:
     assert mouse_target_blocks_window_drag(button)
 
 
-def test_label_press_on_card_starts_manual_drag_when_system_move_unavailable(
+def test_label_press_alone_does_not_start_drag(qapp, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[bool] = []
+    monkeypatch.setattr(
+        usage_window_module,
+        "try_start_window_system_move",
+        lambda _host, _event: calls.append(True) or False,
+    )
+    window = UsageWindow(auto_center=False)
+    window.show()
+    label = window.widget().findChild(QLabel, "sectionLabel")
+    assert label is not None
+    global_pos = label.mapToGlobal(QPoint(label.width() // 2, label.height() // 2))
+    press = QMouseEvent(
+        QEvent.Type.MouseButtonPress,
+        label.mapFromGlobal(global_pos),
+        global_pos,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    window.eventFilter(label, press)
+    assert window._drag_offset is None
+    assert window._drag_press_global == global_pos
+    assert calls == []
+
+
+def test_label_drag_starts_after_move_threshold_when_system_move_unavailable(
     qapp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(usage_window_module, "try_start_window_system_move", lambda _host, _event: False)
@@ -80,6 +106,17 @@ def test_label_press_on_card_starts_manual_drag_when_system_move_unavailable(
         Qt.KeyboardModifier.NoModifier,
     )
     window.eventFilter(label, press)
+    assert window._drag_offset is None
+    moved_global = global_pos + QPoint(20, 0)
+    move = QMouseEvent(
+        QEvent.Type.MouseMove,
+        label.mapFromGlobal(moved_global),
+        moved_global,
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    window.eventFilter(label, move)
     assert window._drag_offset is not None
 
 

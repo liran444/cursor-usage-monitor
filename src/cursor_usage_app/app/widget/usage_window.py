@@ -22,7 +22,8 @@ from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
 from cursor_usage_app.app.widget.window_drag import (
     apply_manual_drag,
-    manual_drag_offset,
+    drag_move_exceeds_threshold,
+    manual_drag_offset_from_global,
     mouse_target_blocks_window_drag,
     try_start_window_system_move,
 )
@@ -51,6 +52,7 @@ class UsageWindow(QWidget):
     ) -> None:
         super().__init__()
         self._drag_offset = None
+        self._drag_press_global = None
         # WindowMinimizeButtonHint keeps the window manager minimize action
         # (Windows taskbar, macOS Dock, Linux panel) without drawing a title bar.
         self.setWindowFlags(
@@ -137,7 +139,7 @@ class UsageWindow(QWidget):
                 if event.type() == QEvent.Type.MouseMove:
                     return self._handle_drag_mouse_move(event)
                 if event.type() == QEvent.Type.MouseButtonRelease:
-                    self._drag_offset = None
+                    self._clear_drag_state()
         return super().eventFilter(watched, event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
@@ -151,7 +153,7 @@ class UsageWindow(QWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        self._drag_offset = None
+        self._clear_drag_state()
         super().mouseReleaseEvent(event)
 
     def _attach_card_drag_filters(self) -> None:
@@ -162,22 +164,37 @@ class UsageWindow(QWidget):
         for child in widget.findChildren(QWidget):
             child.installEventFilter(self)
 
+    def _clear_drag_state(self) -> None:
+        self._drag_offset = None
+        self._drag_press_global = None
+
     def _handle_drag_mouse_press(self, event: QMouseEvent, target: QWidget) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         if isinstance(target, QWidget) and mouse_target_blocks_window_drag(target):
+            self._clear_drag_state()
             return False
-        if try_start_window_system_move(self, event):
-            self._drag_offset = None
-            return False
-        self._drag_offset = manual_drag_offset(self, event)
+        self._drag_press_global = event.globalPosition().toPoint()
+        self._drag_offset = None
         return False
 
     def _handle_drag_mouse_move(self, event: QMouseEvent) -> bool:
-        if self._drag_offset is None:
-            return False
         if not (event.buttons() & Qt.MouseButton.LeftButton):
             return False
+        if self._drag_offset is not None:
+            apply_manual_drag(self, event, self._drag_offset)
+            event.accept()
+            return True
+        press_global = self._drag_press_global
+        if press_global is None:
+            return False
+        current_global = event.globalPosition().toPoint()
+        if not drag_move_exceeds_threshold(press_global, current_global):
+            return False
+        self._drag_press_global = None
+        if try_start_window_system_move(self, event):
+            return False
+        self._drag_offset = manual_drag_offset_from_global(self, press_global)
         apply_manual_drag(self, event, self._drag_offset)
         event.accept()
         return True
