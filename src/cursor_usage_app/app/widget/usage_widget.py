@@ -104,7 +104,7 @@ _STATIC_ANIM_SECTION_ATTRS = (
     "_login_card",
     "_token_panel",
     "_btn_token",
-    "_rule_before_actions",
+    "_rule_before_login_footer",
     "_action_row",
 )
 _BUSY_SPINNER_INTERVAL_MS = 70
@@ -315,6 +315,10 @@ class UsageWidget(QWidget):
             self.setFixedWidth(width)
         self._pin_wrapped_labels()
         if self._needs_browser_login():
+            if hasattr(self, "_summary_viewport"):
+                self._summary_viewport.set_shown_height(0)
+            if hasattr(self, "_metadata_viewport"):
+                self._metadata_viewport.set_shown_height(0)
             height = self._measure_browser_login_height()
         else:
             layout.invalidate()
@@ -357,7 +361,8 @@ class UsageWidget(QWidget):
             blocks.append(self._frame_layout_height(self._loading_card))
 
         blocks.append(self._frame_layout_height(self._login_card))
-        blocks.append(self._rule_before_actions.sizeHint().height())
+        if not self._rule_before_login_footer.isHidden():
+            blocks.append(self._rule_before_login_footer.sizeHint().height())
         # isVisible() is false for the whole tree while the window is hidden; isHidden() reflects .show().
         if not self._token_panel.isHidden():
             blocks.append(self._frame_layout_height(self._token_panel))
@@ -551,6 +556,9 @@ class UsageWidget(QWidget):
         self._login_card.hide()
         root.addWidget(self._login_card)
 
+        self._rule_before_login_footer = _section_rule()
+        root.addWidget(self._rule_before_login_footer)
+
         self._personal_card = QFrame()
         self._personal_card.setObjectName("insetCard")
         personal_layout = QVBoxLayout(self._personal_card)
@@ -704,9 +712,6 @@ class UsageWidget(QWidget):
         self._od_bar = HorizontalBar(QColor(active_palette().coral))
         od_layout.addWidget(self._od_bar)
 
-        self._rule_before_actions = _section_rule()
-        root.addWidget(self._rule_before_actions)
-
         self._token_panel = QFrame()
         self._token_panel.setObjectName("insetCard")
         self._token_panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
@@ -825,6 +830,8 @@ class UsageWidget(QWidget):
         details_layout.addWidget(self._on_demand_card)
         details_layout.addWidget(self._rule_before_team)
         details_layout.addWidget(self._team_block)
+        self._rule_after_usage = _section_rule()
+        details_layout.addWidget(self._rule_after_usage)
 
         self._compact_panel = QWidget()
         compact_host = QVBoxLayout(self._compact_panel)
@@ -835,7 +842,6 @@ class UsageWidget(QWidget):
         self._summary_viewport = TopClip()
         self._details_panel.setParent(self._summary_viewport)
         self._compact_panel.setParent(self._summary_viewport)
-        root.insertWidget(root.indexOf(self._rule_before_actions), self._summary_viewport)
 
         self._metadata_panel = QWidget()
         metadata_layout = QVBoxLayout(self._metadata_panel)
@@ -857,6 +863,7 @@ class UsageWidget(QWidget):
         tail_layout.addWidget(self._action_row)
         tail_layout.addWidget(self._metadata_viewport)
         root.addWidget(self._mode_tail)
+        root.insertWidget(root.indexOf(self._mode_tail), self._summary_viewport)
 
     def _make_notify_bell(self, section_id: str) -> SectionNotifyBell:
         bell = SectionNotifyBell(section_id, self)
@@ -1310,13 +1317,15 @@ class UsageWidget(QWidget):
             self._rule_before_team.setVisible(False)
             self._rule_before_gauges.setVisible(False)
             self._rule_before_on_demand.setVisible(False)
-            self._rule_before_actions.setVisible(True)
+            self._rule_after_usage.setVisible(False)
+            self._rule_before_login_footer.setVisible(True)
             self._rule_before_metadata.setVisible(False)
             return
         self._rule_before_team.setVisible(self._view_model.show_team_row)
         self._rule_before_gauges.setVisible(True)
         self._rule_before_on_demand.setVisible(self._view_model.show_on_demand_card)
-        self._rule_before_actions.setVisible(True)
+        self._rule_after_usage.setVisible(True)
+        self._rule_before_login_footer.setVisible(False)
         self._rule_before_metadata.setVisible(True)
 
     def _start_browser_login(self) -> None:
@@ -1977,6 +1986,7 @@ class UsageWidget(QWidget):
             self._on_demand_card,
             self._rule_before_team,
             self._team_block,
+            self._rule_after_usage,
             self._rule_before_metadata,
             self._metadata_block,
         ):
