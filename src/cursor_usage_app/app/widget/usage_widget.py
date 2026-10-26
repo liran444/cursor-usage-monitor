@@ -366,7 +366,8 @@ class UsageWidget(QWidget):
         # isVisible() is false for the whole tree while the window is hidden; isHidden() reflects .show().
         if not self._token_panel.isHidden():
             blocks.append(self._frame_layout_height(self._token_panel))
-        blocks.append(self._btn_token.sizeHint().height())
+        if not self._btn_token.isHidden():
+            blocks.append(self._btn_token.sizeHint().height())
 
         for index, block_h in enumerate(blocks):
             total += block_h
@@ -1126,6 +1127,7 @@ class UsageWidget(QWidget):
         self._token_error.hide()
         self._token_error.setText("")
         self._token_panel.show()
+        self._sync_set_token_button_visibility()
         self._token_input.setFocus()
         self._resize_to_mode()
 
@@ -1134,7 +1136,12 @@ class UsageWidget(QWidget):
         self._token_error.hide()
         self._token_error.setText("")
         self._token_panel.hide()
+        self._sync_set_token_button_visibility()
         self._resize_to_mode()
+
+    def _sync_set_token_button_visibility(self) -> None:
+        login = self._needs_browser_login()
+        self._btn_token.setVisible(login and self._token_panel.isHidden())
 
     def _save_inline_token(self) -> None:
         try:
@@ -1303,7 +1310,7 @@ class UsageWidget(QWidget):
         if login or empty_loading:
             self._release_widget_vertical_lock(self._mode_tail)
         self._btn_settings.setVisible(not login)
-        self._btn_token.setVisible(login)
+        self._sync_set_token_button_visibility()
         if login or empty_loading:
             self._hide_settings_popup()
         self._sync_section_rules()

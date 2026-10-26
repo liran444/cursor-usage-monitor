@@ -80,6 +80,12 @@ def test_widget_invalid_token_fixture_shows_auth_message(qapp) -> None:
     assert widget._btn_token.isHidden() is False
     assert widget._btn_quit.isHidden() is False
     assert widget._token_panel.isHidden() is True
+    widget.show_token_editor()
+    assert widget._token_panel.isHidden() is False
+    assert widget._btn_token.isHidden() is True
+    widget._hide_token_editor()
+    assert widget._token_panel.isHidden() is True
+    assert widget._btn_token.isHidden() is False
 
 
 def test_refresh_with_snapshot_spins_button_without_banner(qapp) -> None:
