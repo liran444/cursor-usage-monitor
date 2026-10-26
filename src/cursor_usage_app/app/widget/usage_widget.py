@@ -654,7 +654,7 @@ class UsageWidget(QWidget):
         gauge_header_row = QHBoxLayout()
         gauge_header_row.setContentsMargins(0, 0, 0, 0)
         gauge_header_row.setSpacing(4)
-        gauge_title = QLabel("Dashboard API Breakdown")
+        gauge_title = QLabel("Personal Usage Breakdown")
         gauge_title.setObjectName("sectionTitle")
         gauge_header_row.addWidget(gauge_title)
         gauge_header_row.addStretch()
@@ -819,12 +819,12 @@ class UsageWidget(QWidget):
         details_layout = QVBoxLayout(self._details_panel)
         details_layout.setContentsMargins(0, 0, 0, 0)
         details_layout.setSpacing(gap)
-        details_layout.addWidget(self._rule_before_team)
-        details_layout.addWidget(self._team_block)
         details_layout.addWidget(self._rule_before_gauges)
         details_layout.addWidget(self._gauge_block)
         details_layout.addWidget(self._rule_before_on_demand)
         details_layout.addWidget(self._on_demand_card)
+        details_layout.addWidget(self._rule_before_team)
+        details_layout.addWidget(self._team_block)
 
         self._compact_panel = QWidget()
         compact_host = QVBoxLayout(self._compact_panel)
@@ -1970,13 +1970,13 @@ class UsageWidget(QWidget):
     def _set_data_dimmed(self, dimmed: bool) -> None:
         for widget in (
             self._personal_card,
-            self._rule_before_team,
             self._compact_total_row,
-            self._team_block,
             self._rule_before_gauges,
             self._gauge_block,
             self._rule_before_on_demand,
             self._on_demand_card,
+            self._rule_before_team,
+            self._team_block,
             self._rule_before_metadata,
             self._metadata_block,
         ):

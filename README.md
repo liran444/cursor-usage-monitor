@@ -1,6 +1,28 @@
+<p align="center">
+  <img src="src/cursor_usage_app/assets/app-icon.png" alt="Cursor Usage Monitor" width="96" height="96">
+</p>
+
 # Cursor Usage Monitor
 
 **Unofficial** system tray app and desktop widget for [Cursor](https://cursor.com) usage (`usage-summary` API). Shows personal pool, team pool, plan meters, and optional section alerts. Not affiliated with Cursor or Anysphere.
+
+## Screenshots
+
+Sample data from [test fixtures](tests/fixtures/) (dark theme). The floating window opens from the system tray.
+
+| Enterprise (personal + team + on-demand) | Team plan |
+| --- | --- |
+| ![Enterprise usage view](docs/images/readme-enterprise-expanded.png) | ![Team usage view](docs/images/readme-team.png) |
+
+| Personal plan | Compact layout |
+| --- | --- |
+| ![Personal usage view](docs/images/readme-personal.png) | ![Compact usage view](docs/images/readme-compact.png) |
+
+| Sign in (no session) |
+| --- |
+| ![Browser sign-in](docs/images/readme-sign-in.png) |
+
+Regenerate locally: `python scripts/capture_readme_screenshots.py`
 
 ## Install
 
