@@ -87,11 +87,6 @@ class TraySettingsPopup(QFrame):
         appearance.setObjectName("sectionTitle")
         layout.addWidget(appearance)
 
-        appearance_hint = QLabel("Match the system, or choose light or dark for this window.")
-        appearance_hint.setObjectName("mutedLabel")
-        appearance_hint.setWordWrap(True)
-        layout.addWidget(appearance_hint)
-
         self.radio_theme_system = QRadioButton("System")
         self.radio_theme_dark = QRadioButton("Dark")
         self.radio_theme_light = QRadioButton("Light")
@@ -110,7 +105,7 @@ class TraySettingsPopup(QFrame):
         title.setObjectName("sectionTitle")
         layout.addWidget(title)
 
-        hint = QLabel("Tray icon and hover tooltip. Changes apply immediately.")
+        hint = QLabel("Tray icon and hover tooltip")
         hint.setObjectName("mutedLabel")
         hint.setWordWrap(True)
         layout.addWidget(hint)
