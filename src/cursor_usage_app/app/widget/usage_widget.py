@@ -948,6 +948,20 @@ class UsageWidget(QWidget):
             return
         self._opacity_fader.fade_to(self._btn_refresh, _REFRESH_DIM_OPACITY)
 
+    def _release_settings_popup(self) -> None:
+        """Drop a tray-shell popup before showing the in-widget gear popup.
+
+        After ``show_near_point`` the popup is a top-level tool window (``parent``
+        is ``None``). Reparenting that native window back under the main window as
+        ``Qt.Popup`` can crash Qt on Windows.
+        """
+        popup = self._settings_popup
+        if popup is None:
+            return
+        popup.hide()
+        self._settings_popup = None
+        popup.deleteLater()
+
     def _ensure_settings_popup(self) -> TraySettingsPopup:
         if self._settings_popup is not None:
             return self._settings_popup
@@ -985,6 +999,10 @@ class UsageWidget(QWidget):
         self._hide_token_editor()
         self._app_settings = load_app_settings()
         self._sync_theme_from_settings()
+        if (at_global is None) and (self._settings_popup is not None) and (
+            self._settings_popup.parentWidget() is None
+        ):
+            self._release_settings_popup()
         popup = self._ensure_settings_popup()
         self._sync_tray_display_radios()
         self._sync_theme_radios()

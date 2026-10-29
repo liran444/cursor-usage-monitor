@@ -152,6 +152,10 @@ class TraySettingsPopup(QFrame):
     def show_below_anchor(self, anchor: QWidget) -> None:
         """Gear-button popup. The host window is on screen, so Qt.Popup can close on outside click."""
         self._shell_mode = False
+        self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow, False)
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
         host = anchor.window() or anchor
         self._set_window_role(host, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.position_below(anchor)
