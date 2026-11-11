@@ -31,6 +31,19 @@ class FakeKeyring:
         self._passwords.pop((service, username), None)
 
 
+@pytest.fixture(autouse=True)
+def isolated_app_settings(tmp_path, monkeypatch) -> None:
+    """Keep GUI tests independent of the developer's real settings.json."""
+    from cursor_usage_app.settings.app_settings import AppSettings, save_app_settings
+
+    settings_path = tmp_path / "isolated_settings.json"
+    save_app_settings(AppSettings(), settings_path)
+    monkeypatch.setattr(
+        "cursor_usage_app.settings.app_settings.default_settings_path",
+        lambda: settings_path,
+    )
+
+
 @pytest.fixture
 def fake_keyring(monkeypatch) -> FakeKeyring:
     backend = FakeKeyring()

@@ -59,6 +59,14 @@ def test_settings_popup_offers_independent_theme_and_tray_choices(qapp) -> None:
     assert popup.radio_theme_dark.isChecked() is True
     assert popup.radio_theme_system.isChecked() is False
     assert popup.radio_total.isChecked() is True
+    assert popup.radio_widget_expanded.isChecked() is False
+    assert popup.radio_widget_collapsed.isChecked() is False
+
+    popup.radio_widget_collapsed.setChecked(True)
+    assert popup.radio_widget_collapsed.isChecked() is True
+    assert popup.radio_widget_expanded.isChecked() is False
+    assert popup.radio_theme_dark.isChecked() is True
+    assert popup.radio_total.isChecked() is True
     assert popup.radio_personal.isChecked() is False
 
 

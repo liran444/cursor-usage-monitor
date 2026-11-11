@@ -14,6 +14,7 @@ def test_load_missing_file_returns_default(tmp_path) -> None:
     settings = load_app_settings(path)
     assert settings.tray_display_mode == "total_percent"
     assert settings.theme == "dark"
+    assert settings.widget_default_display == "expanded"
 
 
 def test_save_and_load_round_trip(tmp_path) -> None:
@@ -71,6 +72,7 @@ def test_with_tray_display_mode_preserves_notifications() -> None:
     assert updated.tray_display_mode == "personal"
     assert updated.usage_notifications == {"on_demand": True}
     assert updated.theme == "light"
+    assert updated.widget_default_display == "expanded"
 
 
 def test_dark_theme_is_omitted_from_saved_json(tmp_path) -> None:
@@ -117,6 +119,7 @@ def test_with_theme_preserves_other_settings() -> None:
     assert updated.tray_display_mode == "personal"
     assert updated.usage_notifications == {"team": True}
     assert updated.usage_notification_state.billing_cycle_end == "2026-11-01T00:00:00Z"
+    assert updated.widget_default_display == "expanded"
 
 
 def test_mutate_preserves_theme(tmp_path) -> None:
@@ -125,4 +128,56 @@ def test_mutate_preserves_theme(tmp_path) -> None:
     mutate_app_settings(lambda current: current.with_tray_display_mode("personal"), path)
     loaded = load_app_settings(path)
     assert loaded.theme == "light"
+    assert loaded.tray_display_mode == "personal"
+
+
+def test_compact_widget_default_display_round_trip(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    save_app_settings(AppSettings(widget_default_display="compact"), path)
+    loaded = load_app_settings(path)
+    assert loaded.widget_default_display == "compact"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["widget_default_display"] == "compact"
+
+
+def test_expanded_widget_default_display_omitted_from_json(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    save_app_settings(AppSettings(), path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert "widget_default_display" not in raw
+    assert load_app_settings(path).widget_default_display == "expanded"
+
+
+def test_unknown_widget_default_display_returns_expanded(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text('{"widget_default_display": "fullscreen"}', encoding="utf-8")
+    assert load_app_settings(path).widget_default_display == "expanded"
+
+
+def test_with_widget_default_display_preserves_other_settings() -> None:
+    base = AppSettings(
+        tray_display_mode="personal",
+        theme="light",
+        usage_notifications={"team": True},
+    )
+    updated = base.with_widget_default_display("compact")
+    assert updated.widget_default_display == "compact"
+    assert updated.tray_display_mode == "personal"
+    assert updated.theme == "light"
+    assert updated.usage_notifications == {"team": True}
+
+
+def test_with_tray_display_mode_preserves_widget_default_display() -> None:
+    base = AppSettings(widget_default_display="compact", theme="system")
+    updated = base.with_tray_display_mode("personal")
+    assert updated.widget_default_display == "compact"
+    assert updated.theme == "system"
+
+
+def test_mutate_preserves_widget_default_display(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    save_app_settings(AppSettings(widget_default_display="compact", theme="light"), path)
+    mutate_app_settings(lambda current: current.with_tray_display_mode("personal"), path)
+    loaded = load_app_settings(path)
+    assert loaded.widget_default_display == "compact"
     assert loaded.tray_display_mode == "personal"

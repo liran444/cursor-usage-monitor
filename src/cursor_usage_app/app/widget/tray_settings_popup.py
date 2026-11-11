@@ -98,6 +98,26 @@ class TraySettingsPopup(QFrame):
         layout.addWidget(self.radio_theme_system)
         layout.addWidget(self.radio_theme_dark)
         layout.addWidget(self.radio_theme_light)
+ 
+        layout.addWidget(_section_rule())
+
+        default_title = QLabel("Default display")
+        default_title.setObjectName("sectionTitle")
+        layout.addWidget(default_title)
+
+        default_hint = QLabel("When the app starts")
+        default_hint.setObjectName("mutedLabel")
+        default_hint.setWordWrap(True)
+        layout.addWidget(default_hint)
+
+        self.radio_widget_expanded = QRadioButton("Expanded")
+        self.radio_widget_collapsed = QRadioButton("Collapsed")
+        self.widget_display_group = QButtonGroup(self)
+        self.widget_display_group.setExclusive(True)
+        self.widget_display_group.addButton(self.radio_widget_expanded)
+        self.widget_display_group.addButton(self.radio_widget_collapsed)
+        layout.addWidget(self.radio_widget_expanded)
+        layout.addWidget(self.radio_widget_collapsed)
 
         layout.addWidget(_section_rule())
 
@@ -123,6 +143,8 @@ class TraySettingsPopup(QFrame):
             self.radio_theme_system,
             self.radio_theme_dark,
             self.radio_theme_light,
+            self.radio_widget_expanded,
+            self.radio_widget_collapsed,
             self.radio_total,
             self.radio_personal,
         ):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import (
     QColor,
     QCursor,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 from cursor_usage_app.app.shell_branding import icon_for_shell, load_app_icon
 from cursor_usage_app.app.widget.colors import active_palette
 from cursor_usage_app.app.widget.usage_widget import UsageWidget
+from cursor_usage_app.settings.app_settings import load_app_settings
 from cursor_usage_app.app.widget.window_drag import (
     apply_manual_drag,
     drag_move_exceeds_threshold,
@@ -53,6 +54,7 @@ class UsageWindow(QWidget):
         super().__init__()
         self._drag_offset = None
         self._drag_press_global = None
+        self._preparing_display = False
         # WindowMinimizeButtonHint keeps the window manager minimize action
         # (Windows taskbar, macOS Dock, Linux panel) without drawing a title bar.
         self.setWindowFlags(
@@ -79,6 +81,46 @@ class UsageWindow(QWidget):
     def widget(self) -> UsageWidget:
         return self._card
 
+    def show(self) -> None:  # noqa: N802
+        if not self.isVisible():
+            if self._needs_saved_display_snap():
+                self._snap_saved_display_offscreen()
+            else:
+                self.resize_for_content()
+        super().show()
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        super().hideEvent(event)
+        if self._preparing_display:
+            return
+        card = self._card
+        if card._prepare_shutdown_done:
+            return
+        if card._needs_browser_login() or card._empty_loading():
+            return
+        card.apply_saved_default_display()
+        self.resize_for_content()
+
+    def _needs_saved_display_snap(self) -> bool:
+        return self._card.needs_saved_display_snap()
+
+    def _snap_saved_display_offscreen(self) -> None:
+        """First open only: measure and snap before the user-visible show."""
+        if self._preparing_display:
+            return
+        card = self._card
+        self._preparing_display = True
+        self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        try:
+            super().show()
+            card._lock_refresh_metrics_now()
+            card.apply_saved_default_display()
+            self.resize_for_content()
+            super().hide()
+        finally:
+            self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, False)
+            self._preparing_display = False
+
     def resize_for_content(self) -> None:
         if self._card._layout_metrics is not None:
             width = self._card.width() + 4
@@ -94,7 +136,9 @@ class UsageWindow(QWidget):
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
-        QTimer.singleShot(0, self.resize_for_content)
+        if self._preparing_display:
+            return
+        self.resize_for_content()
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)

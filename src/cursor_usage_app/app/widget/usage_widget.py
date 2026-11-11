@@ -69,7 +69,12 @@ from cursor_usage_app.auth.session_store import SessionStore
 from cursor_usage_app.auth.token_normalize import TokenNormalizeError, normalize_session_token
 from cursor_usage_app.cache.usage_cache import CacheEnvelope, CacheEnvelopeOk, parse_cache_envelope
 from cursor_usage_app.domain.models import UsageSnapshot
-from cursor_usage_app.settings.app_settings import ThemeId, load_app_settings, mutate_app_settings
+from cursor_usage_app.settings.app_settings import (
+    ThemeId,
+    WidgetDefaultDisplay,
+    load_app_settings,
+    mutate_app_settings,
+)
 from cursor_usage_app.usage_notifications import (
     acknowledge_thresholds,
     notification_state_for_cycle,
@@ -203,6 +208,29 @@ class UsageWidget(QWidget):
         self.setFixedWidth(_WIDGET_WIDTH)
         self._build_ui()
         self.reload_from_cache()
+
+    def apply_saved_default_display(self) -> None:
+        """Snap to the persisted default display. No animation."""
+        self._app_settings = load_app_settings()
+        if self._needs_browser_login() or self._empty_loading():
+            return
+        self.set_compact(self._app_settings.widget_default_display == "compact")
+
+    def needs_saved_display_snap(self) -> bool:
+        self._app_settings = load_app_settings()
+        if self._needs_browser_login() or self._empty_loading():
+            return False
+        target_compact = self._app_settings.widget_default_display == "compact"
+        at_rest = abs(self._layout_progress - (1.0 if target_compact else 0.0)) < 0.001
+        return not ((self._compact == target_compact) and at_rest)
+
+    def show(self) -> None:  # noqa: N802
+        host = self.window()
+        if (host is None) or (host is self):
+            if self.needs_saved_display_snap():
+                self._lock_refresh_metrics_now()
+                self.apply_saved_default_display()
+        super().show()
 
     def is_compact(self) -> bool:
         return self._compact
@@ -967,16 +995,21 @@ class UsageWidget(QWidget):
         popup.dismissed_via_anchor.connect(self._on_settings_dismissed_via_anchor)
         popup.button_group.buttonToggled.connect(self._on_tray_display_button_toggled)
         popup.theme_group.buttonToggled.connect(self._on_theme_button_toggled)
+        popup.widget_display_group.buttonToggled.connect(self._on_widget_default_display_toggled)
         self._settings_popup = popup
         self._radio_total = popup.radio_total
         self._radio_personal = popup.radio_personal
         self._tray_display_group = popup.button_group
+        self._radio_widget_expanded = popup.radio_widget_expanded
+        self._radio_widget_collapsed = popup.radio_widget_collapsed
+        self._widget_display_group = popup.widget_display_group
         self._radio_theme_system = popup.radio_theme_system
         self._radio_theme_dark = popup.radio_theme_dark
         self._radio_theme_light = popup.radio_theme_light
         self._theme_group = popup.theme_group
         self._sync_tray_display_radios()
         self._sync_theme_radios()
+        self._sync_widget_default_display_radios()
         return popup
 
     def _on_settings_dismissed_via_anchor(self) -> None:
@@ -1003,6 +1036,7 @@ class UsageWidget(QWidget):
         popup = self._ensure_settings_popup()
         self._sync_tray_display_radios()
         self._sync_theme_radios()
+        self._sync_widget_default_display_radios()
         if at_global is not None:
             popup.show_near_point(at_global)
         else:
@@ -1043,6 +1077,16 @@ class UsageWidget(QWidget):
         else:
             self._radio_theme_system.setChecked(True)
         self._theme_group.blockSignals(False)
+
+    def _sync_widget_default_display_radios(self) -> None:
+        if self._settings_popup is None:
+            return
+        self._widget_display_group.blockSignals(True)
+        if self._app_settings.widget_default_display == "compact":
+            self._radio_widget_collapsed.setChecked(True)
+        else:
+            self._radio_widget_expanded.setChecked(True)
+        self._widget_display_group.blockSignals(False)
 
     def _sync_theme_from_settings(self) -> None:
         self._ensure_system_theme_listener()
@@ -1137,6 +1181,18 @@ class UsageWidget(QWidget):
             lambda current: current.with_tray_display_mode(mode),
         )
         self.tray_settings_changed.emit()
+
+    def _on_widget_default_display_toggled(self, button, checked: bool) -> None:
+        if not checked:
+            return
+        display: WidgetDefaultDisplay = (
+            "compact" if button is self._radio_widget_collapsed else "expanded"
+        )
+        if self._app_settings.widget_default_display == display:
+            return
+        self._app_settings = mutate_app_settings(
+            lambda current: current.with_widget_default_display(display),
+        )
 
     def show_token_editor(self) -> None:
         self._hide_settings_popup()
@@ -1948,9 +2004,19 @@ class UsageWidget(QWidget):
         if self._settings_popup is not None:
             self._sync_tray_display_radios()
             self._sync_theme_radios()
+            self._sync_widget_default_display_radios()
+        window = self.window()
+        if (window is not None) and getattr(window, "_preparing_display", False):
+            return
         if self._needs_browser_login():
             QTimer.singleShot(0, self._relayout_browser_login_after_show)
         self._schedule_refresh_metrics_lock()
+
+    def _lock_refresh_metrics_now(self) -> None:
+        if self._refresh_metrics_locked or not self._action_row.isVisible():
+            return
+        self._refresh_metrics_locked = True
+        self._lock_refresh_button_metrics()
 
     def _relayout_browser_login_after_show(self) -> None:
         """Tray reopen measures height while hidden; re-pin and resize once the window is visible."""

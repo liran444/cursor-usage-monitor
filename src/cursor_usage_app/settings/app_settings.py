@@ -22,6 +22,9 @@ DEFAULT_TRAY_DISPLAY_MODE: TrayDisplayMode = "total_percent"
 ThemeId = Literal["dark", "light", "system"]
 DEFAULT_THEME: ThemeId = "dark"
 
+WidgetDefaultDisplay = Literal["expanded", "compact"]
+DEFAULT_WIDGET_DEFAULT_DISPLAY: WidgetDefaultDisplay = "expanded"
+
 
 @dataclass(frozen=True)
 class UsageNotificationState:
@@ -35,6 +38,7 @@ class AppSettings:
     usage_notifications: dict[str, bool] = field(default_factory=dict)
     usage_notification_state: UsageNotificationState = field(default_factory=UsageNotificationState)
     theme: ThemeId = DEFAULT_THEME
+    widget_default_display: WidgetDefaultDisplay = DEFAULT_WIDGET_DEFAULT_DISPLAY
 
     def is_usage_notification_enabled(self, section_id: str) -> bool:
         return bool(self.usage_notifications.get(section_id, False))
@@ -45,6 +49,7 @@ class AppSettings:
             usage_notifications=dict(self.usage_notifications),
             usage_notification_state=self.usage_notification_state,
             theme=self.theme,
+            widget_default_display=self.widget_default_display,
         )
 
     def with_usage_notification(self, section_id: str, enabled: bool) -> AppSettings:
@@ -55,6 +60,7 @@ class AppSettings:
             usage_notifications=merged,
             usage_notification_state=self.usage_notification_state,
             theme=self.theme,
+            widget_default_display=self.widget_default_display,
         )
 
     def with_usage_notification_state(self, state: UsageNotificationState) -> AppSettings:
@@ -63,6 +69,7 @@ class AppSettings:
             usage_notifications=dict(self.usage_notifications),
             usage_notification_state=state,
             theme=self.theme,
+            widget_default_display=self.widget_default_display,
         )
 
     def with_theme(self, theme: ThemeId) -> AppSettings:
@@ -71,6 +78,16 @@ class AppSettings:
             usage_notifications=dict(self.usage_notifications),
             usage_notification_state=self.usage_notification_state,
             theme=theme,
+            widget_default_display=self.widget_default_display,
+        )
+
+    def with_widget_default_display(self, display: WidgetDefaultDisplay) -> AppSettings:
+        return AppSettings(
+            tray_display_mode=self.tray_display_mode,
+            usage_notifications=dict(self.usage_notifications),
+            usage_notification_state=self.usage_notification_state,
+            theme=self.theme,
+            widget_default_display=display,
         )
 
 
@@ -89,6 +106,12 @@ def _parse_theme(raw: object) -> ThemeId:
     if raw in ("light", "dark", "system"):
         return raw
     return DEFAULT_THEME
+
+
+def _parse_widget_default_display(raw: object) -> WidgetDefaultDisplay:
+    if raw in ("expanded", "compact"):
+        return raw
+    return DEFAULT_WIDGET_DEFAULT_DISPLAY
 
 
 def _parse_usage_notifications(raw: object) -> dict[str, bool]:
@@ -135,6 +158,7 @@ def load_app_settings(path: Path | None = None) -> AppSettings:
         usage_notifications=_parse_usage_notifications(raw.get("usage_notifications")),
         usage_notification_state=_parse_usage_notification_state(raw.get("usage_notification_state")),
         theme=_parse_theme(raw.get("theme")),
+        widget_default_display=_parse_widget_default_display(raw.get("widget_default_display")),
     )
 
 
@@ -154,6 +178,8 @@ def save_app_settings(settings: AppSettings, path: Path | None = None) -> None:
     payload: dict[str, object] = {"tray_display_mode": settings.tray_display_mode}
     if settings.theme != DEFAULT_THEME:
         payload["theme"] = settings.theme
+    if settings.widget_default_display != DEFAULT_WIDGET_DEFAULT_DISPLAY:
+        payload["widget_default_display"] = settings.widget_default_display
     if settings.usage_notifications:
         payload["usage_notifications"] = dict(settings.usage_notifications)
     state = settings.usage_notification_state
