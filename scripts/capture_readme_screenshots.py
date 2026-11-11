@@ -13,10 +13,13 @@ from PySide6.QtWidgets import QApplication
 from cursor_usage_app.app.shell_branding import configure_process_for_shell
 from cursor_usage_app.app.widget.appearance_theme import apply_theme_preference
 from cursor_usage_app.app.widget.usage_window import UsageWindow
+from cursor_usage_app.settings import app_settings as app_settings_module
+from cursor_usage_app.settings.app_settings import AppSettings, save_app_settings
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FIXTURES = _REPO_ROOT / "tests" / "fixtures"
 _OUTPUT = _REPO_ROOT / "docs" / "images"
+_CAPTURE_SETTINGS = _REPO_ROOT / "build" / "capture_settings.json"
 
 
 @dataclass(frozen=True)
@@ -35,9 +38,25 @@ _SHOTS = (
 )
 
 
-def _capture_one(window: UsageWindow, path: Path) -> None:
+def _use_capture_settings() -> None:
+    """Ignore the developer's tray default so each shot controls expanded vs compact."""
+    _CAPTURE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    save_app_settings(AppSettings(widget_default_display="expanded"), _CAPTURE_SETTINGS)
+
+    def _path() -> Path:
+        return _CAPTURE_SETTINGS
+
+    app_settings_module.default_settings_path = _path
+
+
+def _capture_one(window: UsageWindow, path: Path, *, compact: bool) -> None:
+    widget = window.widget()
+    widget.set_compact(compact)
     window.resize_for_content()
     window.show()
+    # show() may apply saved default display; each shot's layout wins here.
+    widget.set_compact(compact)
+    window.resize_for_content()
     QApplication.processEvents()
     window.repaint()
     QApplication.processEvents()
@@ -49,6 +68,7 @@ def _capture_one(window: UsageWindow, path: Path) -> None:
 
 def main() -> int:
     configure_process_for_shell()
+    _use_capture_settings()
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 9))
 
@@ -62,12 +82,8 @@ def main() -> int:
         if not fixture_path.is_file():
             raise FileNotFoundError(fixture_path)
         widget.load_fixture_file(fixture_path)
-        if shot.compact:
-            widget.set_compact(True)
-        else:
-            widget.set_compact(False)
         out = _OUTPUT / shot.filename
-        _capture_one(window, out)
+        _capture_one(window, out, compact=shot.compact)
         print(out)
 
     QTimer.singleShot(0, app.quit)
