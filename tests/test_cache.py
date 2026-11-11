@@ -24,7 +24,7 @@ def test_cache_envelope_round_trip(tmp_path: Path) -> None:
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert raw["ok"] is True
     assert "fetchedAt" in raw
-    assert raw["data"]["billing_cycle_end"] == "2026-03-15T12:00:00.000Z"
+    assert raw["data"]["billing_cycle_end"] == "2026-11-15T12:00:00.000Z"
 
     loaded = read_cache_envelope(path)
     assert loaded is not None
