@@ -28,6 +28,8 @@ Regenerate locally: `python scripts/capture_readme_screenshots.py`
 
 **Free installers** (no charge) for Windows, macOS, and Linux are on **[GitHub Releases](https://github.com/liran444/cursor-usage-monitor/releases)** — pick the file for your OS.
 
+> **Platform note:** macOS builds are provided but have **not yet been tested** by the maintainer. Windows and Linux are the primary tested platforms.
+
 Details: **[docs/INSTALL.md](docs/INSTALL.md)** (`.exe`, `.pkg`, `.run`). No separate Python install.
 
 CI also keeps per-platform **workflow artifacts** on each release build if you need them from the Actions tab.
